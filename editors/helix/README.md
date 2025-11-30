@@ -9,32 +9,38 @@ This directory contains the Helix editor configuration for RustOwl LSP.
 
 ## Installation
 
-Copy the `languages.toml` file to your Helix config directory:
+Project-local:
 
 ```bash
-mkdir -p ~/.config/helix
-cp languages.toml ~/.config/helix/languages.toml
+cp . PROJECT/.helix
 ```
 
-If you already have a `languages.toml`, merge the RustOwl configuration:
+User-wide (for new Helix users)
 
-```toml
-[language-server.rustowl]
-command = "rustowl"
-
-[[language]]
-name = "rust"
-language-servers = ["rust-analyzer", "rustowl"]
+```bash
+cp . ~/.config/helix
 ```
 
 ## Usage
 
-1. Open a Rust file in Helix
-2. Save the file to trigger analysis
-3. RustOwl will analyze the code and provide ownership/lifetime information
+1. Open a Rust file in Helix and wait a bit
+2. Simply press `<space>a` (code actions) while your cursor is on a variable, then select:
+
+- **"RustOwl: Show ownership"** - Display ownership/lifetime diagnostics for the variable under cursor
+- **"RustOwl: Hide ownership"** - Clear the diagnostics
+
+That's it! The ownership information will appear as inline diagnostics.
+
+## Troubleshooting
+
+Ownership diagnostics take some time to be computed. In that case you will the text "analyzing..." and you need to wait a few seconds longer. Very large projects may require a longer time to get read.
+
+If you still have problems, check Helix logs:
+
+```bash
+grep -i rustowl ~/.cache/helix/helix.log
+```
 
 ## Limitations
 
-Helix does not support the custom `rustowl/cursor` LSP method that enables hover-triggered decorations. Basic LSP functionality (diagnostics, etc.) will work, but the colored underlines for ownership visualization require editor-specific support.
-
-For full RustOwl functionality, consider using VS Code or Neovim with the dedicated plugins.
+Helix does not support custom LSP methods like `rustowl/cursor` that enable automatic hover-triggered decorations. The ownership visualization in Helix requires manual command invocation. For automatic hover-based visualization, consider using VS Code or Neovim with the dedicated plugins.

@@ -3,6 +3,86 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use tower_lsp::lsp_types;
 
+impl<R> Deco<R> {
+    /// Returns the diagnostic severity for this decoration type.
+    /// Each type gets a distinct severity for better visual differentiation:
+    /// - Outlive, SharedMut -> Error (red - critical ownership issues)
+    /// - Move -> Warning (yellow/orange - ownership transfer)
+    /// - MutBorrow -> Information (blue - mutable access)
+    /// - ImmBorrow, Call, Lifetime -> Hint (gray/dim - informational)
+    pub fn diagnostic_severity(&self) -> lsp_types::DiagnosticSeverity {
+        match self {
+            Deco::Outlive { .. } | Deco::SharedMut { .. } => lsp_types::DiagnosticSeverity::ERROR,
+            Deco::Move { .. } => lsp_types::DiagnosticSeverity::WARNING,
+            Deco::MutBorrow { .. } => lsp_types::DiagnosticSeverity::INFORMATION,
+            Deco::ImmBorrow { .. } | Deco::Call { .. } | Deco::Lifetime { .. } => {
+                lsp_types::DiagnosticSeverity::HINT
+            }
+        }
+    }
+
+    /// Returns the hover text for this decoration
+    pub fn hover_text(&self) -> &str {
+        match self {
+            Deco::Lifetime { hover_text, .. }
+            | Deco::ImmBorrow { hover_text, .. }
+            | Deco::MutBorrow { hover_text, .. }
+            | Deco::Move { hover_text, .. }
+            | Deco::Call { hover_text, .. }
+            | Deco::SharedMut { hover_text, .. }
+            | Deco::Outlive { hover_text, .. } => hover_text,
+        }
+    }
+
+    /// Returns a diagnostic code for this decoration type
+    pub fn diagnostic_code(&self) -> &'static str {
+        match self {
+            Deco::Lifetime { .. } => "rustowl:lifetime",
+            Deco::ImmBorrow { .. } => "rustowl:imm-borrow",
+            Deco::MutBorrow { .. } => "rustowl:mut-borrow",
+            Deco::Move { .. } => "rustowl:move",
+            Deco::Call { .. } => "rustowl:call",
+            Deco::SharedMut { .. } => "rustowl:shared-mut",
+            Deco::Outlive { .. } => "rustowl:outlive",
+        }
+    }
+
+    /// Check if this decoration should be published as a diagnostic.
+    /// Lifetime spans are too verbose for inline diagnostics, so we skip them.
+    pub fn should_publish_as_diagnostic(&self) -> bool {
+        !matches!(self, Deco::Lifetime { .. })
+    }
+}
+
+impl Deco<lsp_types::Range> {
+    /// Convert this decoration to an LSP diagnostic
+    pub fn to_diagnostic(&self) -> lsp_types::Diagnostic {
+        let range = match self {
+            Deco::Lifetime { range, .. }
+            | Deco::ImmBorrow { range, .. }
+            | Deco::MutBorrow { range, .. }
+            | Deco::Move { range, .. }
+            | Deco::Call { range, .. }
+            | Deco::SharedMut { range, .. }
+            | Deco::Outlive { range, .. } => *range,
+        };
+
+        lsp_types::Diagnostic {
+            range,
+            severity: Some(self.diagnostic_severity()),
+            code: Some(lsp_types::NumberOrString::String(
+                self.diagnostic_code().to_string(),
+            )),
+            code_description: None,
+            source: Some("rustowl".to_string()),
+            message: self.hover_text().to_string(),
+            related_information: None,
+            tags: None,
+            data: None,
+        }
+    }
+}
+
 // TODO: Variable name should be checked?
 //const ASYNC_MIR_VARS: [&str; 2] = ["_task_context", "__awaitee"];
 const ASYNC_RESUME_TY: [&str; 2] = [

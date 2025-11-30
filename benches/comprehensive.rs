@@ -7,7 +7,9 @@ fn bench_rustowl_check(c: &mut Criterion) {
     let binary_path = "./target/release/rustowl";
 
     if !Path::new(binary_path).exists() {
-        panic!("Binary not found at {}. Run 'cargo build --release --bin rustowl' first.", binary_path);
+        panic!(
+            "Binary not found at {binary_path}. Run 'cargo build --release --bin rustowl' first."
+        );
     }
 
     let test_fixture = "./benches/perf-tests";

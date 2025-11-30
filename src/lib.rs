@@ -33,13 +33,10 @@ pub mod utils;
 
 pub use lsp::backend::Backend;
 
-// Re-export for CLI usage
-pub use crate::start_lsp_server_impl as start_lsp_server;
-
 use tower_lsp::{LspService, Server};
 
 /// Starts the LSP server
-pub async fn start_lsp_server_impl() {
+pub async fn start_lsp_server() {
     use std::env;
 
     fn set_log_level(default: log::LevelFilter) {

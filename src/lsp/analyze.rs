@@ -240,7 +240,7 @@ impl Analyzer {
             // Wait for compiler thread to finish
             match compiler_handle.join() {
                 Ok(Ok(_)) => log::info!("Compiler finished successfully"),
-                Ok(Err(e)) => log::warn!("Compiler error: {}", e),
+                Ok(Err(e)) => log::warn!("Compiler error: {e}"),
                 Err(_) => log::error!("Compiler thread panicked"),
             }
 

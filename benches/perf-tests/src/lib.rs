@@ -172,7 +172,6 @@ mod tests {
         state.add(Container::new("b"));
         assert_eq!(state.count(), 2);
     }
-
     #[test]
     fn test_borrowed() {
         let data = [1, 2, 3];

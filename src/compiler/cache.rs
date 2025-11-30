@@ -1,14 +1,21 @@
-//! Cache management for MIR analysis results
+#![allow(
+    clippy::absolute_paths,
+    reason = "paths used in compiler plugin context"
+)]
 
-use crate::models::*;
+use std::{
+    collections::HashMap,
+    io::Write,
+    sync::{LazyLock, Mutex},
+};
+
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_middle::ty::TyCtxt;
 use rustc_query_system::ich::StableHashingContext;
 use rustc_stable_hash::{FromStableHash, SipHasher128Hash};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::io::Write;
-use std::sync::{LazyLock, Mutex};
+
+use crate::models::Function;
 
 pub static CACHE: LazyLock<Mutex<Option<CacheData>>> = LazyLock::new(|| Mutex::new(None));
 
@@ -22,8 +29,8 @@ impl StableHashString {
 impl FromStableHash for StableHashString {
     type Hash = SipHasher128Hash;
     fn from(hash: Self::Hash) -> Self {
-        let byte0 = hash.0[0] as u128;
-        let byte1 = hash.0[1] as u128;
+        let byte0 = u128::from(hash.0[0]);
+        let byte1 = u128::from(hash.0[1]);
         let byte = (byte0 << 64) | byte1;
         Self(format!("{byte:x}"))
     }

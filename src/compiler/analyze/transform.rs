@@ -1,4 +1,5 @@
-use crate::models::*;
+use std::collections::{HashMap, HashSet};
+
 use rayon::prelude::*;
 use rustc_borrowck::consumers::{BorrowIndex, BorrowSet, RichLocation};
 use rustc_hir::def_id::LocalDefId;
@@ -10,9 +11,10 @@ use rustc_middle::{
     ty::{TyCtxt, TypeFoldable, TypeFolder},
 };
 use rustc_span::source_map::SourceMap;
-use std::collections::{HashMap, HashSet};
 
-/// RegionEraser to erase region variables from MIR body
+use crate::models::{FnLocal, MirBasicBlock, MirRval, MirStatement, MirTerminator, Range};
+
+/// `RegionEraser` to erase region variables from MIR body
 /// This is required to hash MIR body
 struct RegionEraser<'tcx> {
     tcx: TyCtxt<'tcx>,
@@ -51,12 +53,13 @@ pub fn collect_user_vars(
                 super::range_from_span(source, debug.source_info.span, offset)
                     .map(|range| (place.local, (range, debug.name.as_str().to_owned())))
             }
-            _ => None,
+            VarDebugInfoContents::Const(_) => None,
         })
         .collect()
 }
 
-/// Collect and transform [`BasicBlocks`] into our data structure [`MirBasicBlock`]s.
+/// Collect and transform [`BasicBlocks`] into our data structure
+/// [`MirBasicBlock`]s.
 pub fn collect_basic_blocks(
     fn_id: LocalDefId,
     source: &str,
@@ -170,9 +173,13 @@ fn statement_location_to_range(
 ) -> Option<Range> {
     basic_blocks.get(basic_block).and_then(|bb| {
         if statement < bb.statements.len() {
-            bb.statements.get(statement).map(|v| v.range())
+            bb.statements
+                .get(statement)
+                .map(crate::models::MirStatement::range)
         } else {
-            bb.terminator.as_ref().map(|v| v.range())
+            bb.terminator
+                .as_ref()
+                .map(crate::models::MirTerminator::range)
         }
     })
 }
@@ -210,7 +217,7 @@ pub fn rich_locations_to_ranges(
 }
 
 /// Our representation of [`rustc_borrowck::consumers::BorrowData`]
-#[allow(unused)]
+#[allow(unused, reason = "used for MIR analysis")]
 pub enum BorrowData {
     Shared { borrowed: Local, assigned: Local },
     Mutable { borrowed: Local, assigned: Local },
@@ -226,7 +233,7 @@ impl BorrowMap {
     pub fn new(borrow_set: &BorrowSet<'_>) -> Self {
         let mut location_map = Vec::new();
         // BorrowIndex corresponds to Location index
-        for (location, data) in borrow_set.location_map().iter() {
+        for (location, data) in borrow_set.location_map() {
             let data = if data.kind().mutability().is_mut() {
                 BorrowData::Mutable {
                     borrowed: data.borrowed_place().local,
@@ -253,7 +260,7 @@ impl BorrowMap {
     pub fn get_from_borrow_index(&self, borrow: BorrowIndex) -> Option<&(Location, BorrowData)> {
         self.location_map.get(borrow.index())
     }
-    pub fn local_map(&self) -> &HashMap<Local, HashSet<BorrowIndex>> {
+    pub const fn local_map(&self) -> &HashMap<Local, HashSet<BorrowIndex>> {
         &self.local_map
     }
 }

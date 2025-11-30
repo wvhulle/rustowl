@@ -1,21 +1,26 @@
-use crate::{lsp::progress, models::*, utils};
-use std::collections::HashSet;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
+
 use tower_lsp::lsp_types;
+
+use crate::{
+    lsp::progress,
+    models::{FnLocal, Loc, MirDecl, MirRval, MirStatement, MirTerminator, Range},
+    utils,
+};
 
 impl<R> Deco<R> {
     /// Returns the diagnostic severity for this decoration type.
     /// Each type gets a distinct severity for better visual differentiation:
-    /// - Outlive, SharedMut -> Error (red - critical ownership issues)
+    /// - Outlive, `SharedMut` -> Error (red - critical ownership issues)
     /// - Move -> Warning (yellow/orange - ownership transfer)
-    /// - MutBorrow -> Information (blue - mutable access)
-    /// - ImmBorrow, Call, Lifetime -> Hint (gray/dim - informational)
-    pub fn diagnostic_severity(&self) -> lsp_types::DiagnosticSeverity {
+    /// - `MutBorrow` -> Information (blue - mutable access)
+    /// - `ImmBorrow`, Call, Lifetime -> Hint (gray/dim - informational)
+    pub const fn diagnostic_severity(&self) -> lsp_types::DiagnosticSeverity {
         match self {
-            Deco::Outlive { .. } | Deco::SharedMut { .. } => lsp_types::DiagnosticSeverity::ERROR,
-            Deco::Move { .. } => lsp_types::DiagnosticSeverity::WARNING,
-            Deco::MutBorrow { .. } => lsp_types::DiagnosticSeverity::INFORMATION,
-            Deco::ImmBorrow { .. } | Deco::Call { .. } | Deco::Lifetime { .. } => {
+            Self::Outlive { .. } | Self::SharedMut { .. } => lsp_types::DiagnosticSeverity::ERROR,
+            Self::Move { .. } => lsp_types::DiagnosticSeverity::WARNING,
+            Self::MutBorrow { .. } => lsp_types::DiagnosticSeverity::INFORMATION,
+            Self::ImmBorrow { .. } | Self::Call { .. } | Self::Lifetime { .. } => {
                 lsp_types::DiagnosticSeverity::HINT
             }
         }
@@ -24,33 +29,27 @@ impl<R> Deco<R> {
     /// Returns the hover text for this decoration
     pub fn hover_text(&self) -> &str {
         match self {
-            Deco::Lifetime { hover_text, .. }
-            | Deco::ImmBorrow { hover_text, .. }
-            | Deco::MutBorrow { hover_text, .. }
-            | Deco::Move { hover_text, .. }
-            | Deco::Call { hover_text, .. }
-            | Deco::SharedMut { hover_text, .. }
-            | Deco::Outlive { hover_text, .. } => hover_text,
+            Self::Lifetime { hover_text, .. }
+            | Self::ImmBorrow { hover_text, .. }
+            | Self::MutBorrow { hover_text, .. }
+            | Self::Move { hover_text, .. }
+            | Self::Call { hover_text, .. }
+            | Self::SharedMut { hover_text, .. }
+            | Self::Outlive { hover_text, .. } => hover_text,
         }
     }
 
     /// Returns a diagnostic code for this decoration type
-    pub fn diagnostic_code(&self) -> &'static str {
+    pub const fn diagnostic_code(&self) -> &'static str {
         match self {
-            Deco::Lifetime { .. } => "rustowl:lifetime",
-            Deco::ImmBorrow { .. } => "rustowl:imm-borrow",
-            Deco::MutBorrow { .. } => "rustowl:mut-borrow",
-            Deco::Move { .. } => "rustowl:move",
-            Deco::Call { .. } => "rustowl:call",
-            Deco::SharedMut { .. } => "rustowl:shared-mut",
-            Deco::Outlive { .. } => "rustowl:outlive",
+            Self::Lifetime { .. } => "rustowl:lifetime",
+            Self::ImmBorrow { .. } => "rustowl:imm-borrow",
+            Self::MutBorrow { .. } => "rustowl:mut-borrow",
+            Self::Move { .. } => "rustowl:move",
+            Self::Call { .. } => "rustowl:call",
+            Self::SharedMut { .. } => "rustowl:shared-mut",
+            Self::Outlive { .. } => "rustowl:outlive",
         }
-    }
-
-    /// Check if this decoration should be published as a diagnostic.
-    /// Lifetime spans are too verbose for inline diagnostics, so we skip them.
-    pub fn should_publish_as_diagnostic(&self) -> bool {
-        !matches!(self, Deco::Lifetime { .. })
     }
 }
 
@@ -58,13 +57,13 @@ impl Deco<lsp_types::Range> {
     /// Convert this decoration to an LSP diagnostic
     pub fn to_diagnostic(&self) -> lsp_types::Diagnostic {
         let range = match self {
-            Deco::Lifetime { range, .. }
-            | Deco::ImmBorrow { range, .. }
-            | Deco::MutBorrow { range, .. }
-            | Deco::Move { range, .. }
-            | Deco::Call { range, .. }
-            | Deco::SharedMut { range, .. }
-            | Deco::Outlive { range, .. } => *range,
+            Self::Lifetime { range, .. }
+            | Self::ImmBorrow { range, .. }
+            | Self::MutBorrow { range, .. }
+            | Self::Move { range, .. }
+            | Self::Call { range, .. }
+            | Self::SharedMut { range, .. }
+            | Self::Outlive { range, .. } => *range,
         };
 
         lsp_types::Diagnostic {
@@ -84,7 +83,7 @@ impl Deco<lsp_types::Range> {
 }
 
 // TODO: Variable name should be checked?
-//const ASYNC_MIR_VARS: [&str; 2] = ["_task_context", "__awaitee"];
+// const ASYNC_MIR_VARS: [&str; 2] = ["_task_context", "__awaitee"];
 const ASYNC_RESUME_TY: [&str; 2] = [
     "std::future::ResumeTy",
     "impl std::future::Future<Output = ()>",
@@ -137,9 +136,13 @@ pub enum Deco<R = Range> {
     },
 }
 impl Deco<Range> {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "range conversion logic requires detailed matching"
+    )]
     pub fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
         match self.clone() {
-            Deco::Lifetime {
+            Self::Lifetime {
                 local,
                 range,
                 hover_text,
@@ -162,7 +165,7 @@ impl Deco<Range> {
                     overlapped,
                 }
             }
-            Deco::ImmBorrow {
+            Self::ImmBorrow {
                 local,
                 range,
                 hover_text,
@@ -185,7 +188,7 @@ impl Deco<Range> {
                     overlapped,
                 }
             }
-            Deco::MutBorrow {
+            Self::MutBorrow {
                 local,
                 range,
                 hover_text,
@@ -208,7 +211,7 @@ impl Deco<Range> {
                     overlapped,
                 }
             }
-            Deco::Move {
+            Self::Move {
                 local,
                 range,
                 hover_text,
@@ -231,7 +234,7 @@ impl Deco<Range> {
                     overlapped,
                 }
             }
-            Deco::Call {
+            Self::Call {
                 local,
                 range,
                 hover_text,
@@ -254,7 +257,7 @@ impl Deco<Range> {
                     overlapped,
                 }
             }
-            Deco::SharedMut {
+            Self::SharedMut {
                 local,
                 range,
                 hover_text,
@@ -278,7 +281,7 @@ impl Deco<Range> {
                 }
             }
 
-            Deco::Outlive {
+            Self::Outlive {
                 local,
                 range,
                 hover_text,
@@ -309,6 +312,10 @@ pub struct Decorations {
     pub is_analyzed: bool,
     pub status: progress::AnalysisStatus,
     pub path: Option<PathBuf>,
+    #[allow(
+        clippy::struct_field_names,
+        reason = "struct represents a collection of decorations"
+    )]
     pub decorations: Vec<Deco<lsp_types::Range>>,
 }
 
@@ -322,7 +329,7 @@ impl CursorRequest {
     pub fn path(&self) -> Option<PathBuf> {
         self.document.uri.to_file_path().ok()
     }
-    pub fn position(&self) -> lsp_types::Position {
+    pub const fn position(&self) -> lsp_types::Position {
         self.position
     }
 }
@@ -341,7 +348,7 @@ pub struct SelectLocal {
     selected: Option<(SelectReason, FnLocal, Range)>,
 }
 impl SelectLocal {
-    pub fn new(pos: Loc) -> Self {
+    pub const fn new(pos: Loc) -> Self {
         Self {
             pos,
             candidate_local_decls: Vec::new(),
@@ -362,7 +369,7 @@ impl SelectLocal {
                         }
                     }
                     (SelectReason::Var, _) => {}
-                    (_, SelectReason::Move) | (_, SelectReason::Borrow) => {
+                    (_, SelectReason::Move | SelectReason::Borrow) => {
                         if range.size() < old_range.size() {
                             self.selected = Some((reason, local, range));
                         }
@@ -388,8 +395,7 @@ impl SelectLocal {
 impl utils::MirVisitor for SelectLocal {
     fn visit_decl(&mut self, decl: &MirDecl) {
         let (local, ty) = match decl {
-            MirDecl::User { local, ty, .. } => (local, ty),
-            MirDecl::Other { local, ty, .. } => (local, ty),
+            MirDecl::User { local, ty, .. } | MirDecl::Other { local, ty, .. } => (local, ty),
         };
         if ASYNC_RESUME_TY.contains(&ty.as_str()) {
             return;
@@ -444,7 +450,7 @@ impl CalcDecos {
         }
     }
 
-    fn get_deco_order(deco: &Deco) -> u8 {
+    const fn get_deco_order(deco: &Deco) -> u8 {
         match deco {
             Deco::Lifetime { .. } => 0,
             Deco::ImmBorrow { .. } => 1,
@@ -460,6 +466,7 @@ impl CalcDecos {
         self.decorations.sort_by_key(Self::get_deco_order);
     }
 
+    #[allow(clippy::too_many_lines, reason = "complex overlap handling logic")]
     pub fn handle_overlapping(&mut self) {
         self.sort_by_definition();
         let mut i = 1;
@@ -512,7 +519,7 @@ impl CalcDecos {
 
                 if let Some(common) = utils::common_range(current_range, prev_range) {
                     let mut new_decos = Vec::new();
-                    let non_overlapping = utils::exclude_ranges(vec![prev_range], vec![common]);
+                    let non_overlapping = utils::exclude_ranges(vec![prev_range], &[common]);
 
                     for range in non_overlapping {
                         let new_deco = match prev {
@@ -663,12 +670,10 @@ impl utils::MirVisitor for CalcDecos {
             };
         self.current_fn_id = local.fn_id;
         if self.locals.contains(&local) {
-            let var_str = match name {
-                Some(mir_var_name) => {
-                    format!("variable `{mir_var_name}`")
-                }
-                None => "anonymous variable".to_owned(),
-            };
+            let var_str = name.map_or_else(
+                || "anonymous variable".to_owned(),
+                |mir_var_name| format!("variable `{mir_var_name}`"),
+            );
             // merge Drop object lives
             let drop_copy_live = if *drop {
                 utils::eliminated_ranges(drop_range.clone())
@@ -694,7 +699,7 @@ impl utils::MirVisitor for CalcDecos {
                     overlapped: false,
                 });
             }
-            let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
+            let outlive = utils::exclude_ranges(must_live_at.clone(), &drop_copy_live);
             for range in outlive {
                 self.decorations.push(Deco::Outlive {
                     local,

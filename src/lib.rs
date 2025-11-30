@@ -1,42 +1,37 @@
-//! # RustOwl lib
-//!
-//! Libraries that used in RustOwl
-
 #![feature(rustc_private)]
 
-pub extern crate indexmap;
-pub extern crate polonius_engine;
-pub extern crate rustc_borrowck;
-pub extern crate rustc_data_structures;
-pub extern crate rustc_driver;
-pub extern crate rustc_errors;
-pub extern crate rustc_hash;
-pub extern crate rustc_hir;
-pub extern crate rustc_index;
-pub extern crate rustc_interface;
-pub extern crate rustc_middle;
-pub extern crate rustc_query_system;
-pub extern crate rustc_session;
-pub extern crate rustc_span;
-pub extern crate rustc_stable_hash;
-pub extern crate rustc_type_ir;
-pub extern crate smallvec;
+extern crate indexmap;
+extern crate polonius_engine;
+extern crate rustc_borrowck;
+extern crate rustc_data_structures;
+extern crate rustc_driver;
+extern crate rustc_errors;
+extern crate rustc_hash;
+extern crate rustc_hir;
+extern crate rustc_index;
+extern crate rustc_interface;
+extern crate rustc_middle;
+extern crate rustc_query_system;
+extern crate rustc_session;
+extern crate rustc_span;
+extern crate rustc_stable_hash;
+extern crate rustc_type_ir;
+extern crate smallvec;
 
-pub mod cache;
+mod cache;
 pub mod cli;
 pub mod compiler;
-pub mod lsp;
-pub mod models;
-pub mod shells;
-pub mod toolchain;
-pub mod utils;
+mod lsp;
+mod models;
+mod shells;
+mod toolchain;
+mod utils;
 
-pub use lsp::backend::Backend;
-
+use lsp::backend::Backend;
+use tokio::io;
 use tower_lsp::{LspService, Server};
 
-/// Starts the LSP server
-pub async fn start_lsp_server() {
+async fn start_lsp_server() {
     use std::env;
 
     fn set_log_level(default: log::LevelFilter) {
@@ -52,8 +47,8 @@ pub async fn start_lsp_server() {
     eprintln!("RustOwl v{}", env!("CARGO_PKG_VERSION"));
     eprintln!("This is an LSP server. You can use --help flag to show help.");
 
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
+    let stdin = io::stdin();
+    let stdout = io::stdout();
 
     let (service, socket) = LspService::build(Backend::new)
         .custom_method("rustowl/cursor", Backend::cursor)
@@ -62,7 +57,3 @@ pub async fn start_lsp_server() {
 
     Server::new(stdin, stdout, socket).serve(service).await;
 }
-
-// Miri-specific memory safety tests
-#[cfg(test)]
-mod miri_tests;

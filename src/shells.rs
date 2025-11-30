@@ -1,13 +1,14 @@
-use clap_complete_nushell::Nushell;
-
-use std::fmt::Display;
-use std::path::Path;
-use std::str::FromStr;
+use std::{
+    env,
+    fmt::{self, Display},
+    io,
+    path::Path,
+    str::FromStr,
+};
 
 use clap::ValueEnum;
-
-use clap_complete::Generator;
-use clap_complete::shells;
+use clap_complete::{Generator, shells};
+use clap_complete_nushell::Nushell;
 
 /// Shell with auto-generated completion script available.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
@@ -21,15 +22,15 @@ pub enum Shell {
     /// Friendly Interactive `SHell` (fish)
     Fish,
     /// `PowerShell`
-    PowerShell,
+    Power,
     /// Z `SHell` (zsh)
     Zsh,
-    /// Nushell
+    /// `Nushell`
     Nushell,
 }
 
 impl Display for Shell {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.to_possible_value()
             .expect("no values are skipped")
             .get_name()
@@ -41,35 +42,34 @@ impl FromStr for Shell {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for variant in Self::value_variants() {
-            if variant.to_possible_value().unwrap().matches(s, false) {
-                return Ok(*variant);
-            }
-        }
-        Err(format!("invalid variant: {s}"))
+        Self::value_variants()
+            .iter()
+            .find(|variant| variant.to_possible_value().unwrap().matches(s, false))
+            .copied()
+            .ok_or_else(|| format!("invalid variant: {s}"))
     }
 }
 
 impl Generator for Shell {
     fn file_name(&self, name: &str) -> String {
         match self {
-            Shell::Bash => shells::Bash.file_name(name),
-            Shell::Elvish => shells::Elvish.file_name(name),
-            Shell::Fish => shells::Fish.file_name(name),
-            Shell::PowerShell => shells::PowerShell.file_name(name),
-            Shell::Zsh => shells::Zsh.file_name(name),
-            Shell::Nushell => Nushell.file_name(name),
+            Self::Bash => shells::Bash.file_name(name),
+            Self::Elvish => shells::Elvish.file_name(name),
+            Self::Fish => shells::Fish.file_name(name),
+            Self::Power => shells::PowerShell.file_name(name),
+            Self::Zsh => shells::Zsh.file_name(name),
+            Self::Nushell => Nushell.file_name(name),
         }
     }
 
-    fn generate(&self, cmd: &clap::Command, buf: &mut dyn std::io::Write) {
+    fn generate(&self, cmd: &clap::Command, buf: &mut dyn io::Write) {
         match self {
-            Shell::Bash => shells::Bash.generate(cmd, buf),
-            Shell::Elvish => shells::Elvish.generate(cmd, buf),
-            Shell::Fish => shells::Fish.generate(cmd, buf),
-            Shell::PowerShell => shells::PowerShell.generate(cmd, buf),
-            Shell::Zsh => shells::Zsh.generate(cmd, buf),
-            Shell::Nushell => Nushell.generate(cmd, buf),
+            Self::Bash => shells::Bash.generate(cmd, buf),
+            Self::Elvish => shells::Elvish.generate(cmd, buf),
+            Self::Fish => shells::Fish.generate(cmd, buf),
+            Self::Power => shells::PowerShell.generate(cmd, buf),
+            Self::Zsh => shells::Zsh.generate(cmd, buf),
+            Self::Nushell => Nushell.generate(cmd, buf),
         }
     }
 }
@@ -86,20 +86,20 @@ impl Shell {
     /// assert_eq!(Shell::from_shell_path("/usr/bin/zsh"), Some(Shell::Zsh));
     /// assert_eq!(Shell::from_shell_path("/opt/my_custom_shell"), None);
     /// ```
-    pub fn from_shell_path<P: AsRef<Path>>(path: P) -> Option<Shell> {
+    pub fn from_shell_path<P: AsRef<Path>>(path: P) -> Option<Self> {
         parse_shell_from_path(path.as_ref())
     }
 
     /// Determine the user's current shell from the environment
     ///
-    /// This will read the SHELL environment variable and try to determine which shell is in use
-    /// from that.
+    /// This will read the SHELL environment variable and try to determine which
+    /// shell is in use from that.
     ///
-    /// If SHELL is not set, then on windows, it will default to powershell, and on
-    /// other operating systems it will return `None`.
+    /// If SHELL is not set, then on windows, it will default to powershell, and
+    /// on other operating systems it will return `None`.
     ///
-    /// If SHELL is set, but contains a value that doesn't correspond to one of the supported shell
-    /// types, then return `None`.
+    /// If SHELL is set, but contains a value that doesn't correspond to one of
+    /// the supported shell types, then return `None`.
     ///
     /// # Example:
     ///
@@ -110,21 +110,22 @@ impl Shell {
     /// #     Command::new("compl")
     /// # }
     /// let mut cmd = build_cli();
-    /// generate(Shell::from_env().unwrap_or(Shell::Bash), &mut cmd, "myapp", &mut std::io::stdout());
+    /// generate(
+    ///     Shell::from_env().unwrap_or(Shell::Bash),
+    ///     &mut cmd,
+    ///     "myapp",
+    ///     &mut std::io::stdout(),
+    /// );
     /// ```
-    pub fn from_env() -> Option<Shell> {
-        if let Some(env_shell) = std::env::var_os("SHELL") {
-            Shell::from_shell_path(env_shell)
-        } else if cfg!(windows) {
-            Some(Shell::PowerShell)
-        } else {
-            None
-        }
+    pub fn from_env() -> Option<Self> {
+        env::var_os("SHELL")
+            .and_then(Self::from_shell_path)
+            .or_else(|| cfg!(windows).then_some(Self::Power))
     }
 }
 
-// use a separate function to avoid having to monomorphize the entire function due
-// to from_shell_path being generic
+// use a separate function to avoid having to monomorphize the entire function
+// due to from_shell_path being generic
 fn parse_shell_from_path(path: &Path) -> Option<Shell> {
     let name = path.file_stem()?.to_str()?;
     match name {
@@ -132,7 +133,7 @@ fn parse_shell_from_path(path: &Path) -> Option<Shell> {
         "zsh" => Some(Shell::Zsh),
         "fish" => Some(Shell::Fish),
         "elvish" => Some(Shell::Elvish),
-        "powershell" | "powershell_ise" => Some(Shell::PowerShell),
+        "powershell" | "powershell_ise" => Some(Shell::Power),
         "nushell" => Some(Shell::Nushell),
         _ => None,
     }

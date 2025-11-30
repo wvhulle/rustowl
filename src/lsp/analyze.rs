@@ -1,15 +1,21 @@
-//! Analysis module for RustOwl LSP
-//!
-//! This module handles triggering ownership/lifetime analysis using the integrated compiler.
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::Arc,
+};
 
-use crate::{cache::*, compiler, models::*, toolchain};
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process,
+    process, runtime,
     sync::{Notify, mpsc},
+    task,
+};
+
+use crate::{
+    cache::{is_cache, set_cache_path},
+    compiler,
+    models::Workspace,
+    toolchain,
 };
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -19,9 +25,9 @@ pub struct CargoCheckMessageTarget {
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
 pub enum CargoCheckMessage {
-    #[allow(unused)]
+    #[allow(unused, reason = "used for cargo check parsing")]
     CompilerArtifact { target: CargoCheckMessageTarget },
-    #[allow(unused)]
+    #[allow(unused, reason = "used for cargo check parsing")]
     BuildFinished {},
 }
 
@@ -73,7 +79,7 @@ impl Analyzer {
                 path: metadata.workspace_root.as_std_path().to_path_buf(),
                 metadata: Some(metadata),
             })
-        } else if path.is_file() && path.extension().map(|v| v == "rs").unwrap_or(false) {
+        } else if path.is_file() && path.extension().is_some_and(|v| v == "rs") {
             Ok(Self {
                 path,
                 metadata: None,
@@ -85,13 +91,6 @@ impl Analyzer {
     }
     pub fn target_path(&self) -> &Path {
         &self.path
-    }
-    pub fn workspace_path(&self) -> Option<&Path> {
-        if self.metadata.is_some() {
-            Some(&self.path)
-        } else {
-            None
-        }
     }
 
     pub async fn analyze(&self, all_targets: bool, all_features: bool) -> AnalyzeEventIter {
@@ -119,8 +118,8 @@ impl Analyzer {
             .args(["clean", "--package", &package_name])
             .env("CARGO_TARGET_DIR", &target_dir)
             .current_dir(&self.path)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
         command.spawn().unwrap().wait().await.ok();
 
         let mut command = toolchain::setup_cargo_command();
@@ -139,7 +138,7 @@ impl Analyzer {
             .env("CARGO_TARGET_DIR", &target_dir)
             .env_remove("RUSTC_WRAPPER")
             .current_dir(&self.path)
-            .stdout(std::process::Stdio::piped())
+            .stdout(Stdio::piped())
             .kill_on_drop(true);
 
         if is_cache() {
@@ -148,10 +147,9 @@ impl Analyzer {
 
         if log::max_level()
             .to_level()
-            .map(|v| v < log::Level::Info)
-            .unwrap_or(true)
+            .is_none_or(|v| v < log::Level::Info)
         {
-            command.stderr(std::process::Stdio::null());
+            command.stderr(Stdio::null());
         }
 
         let package_count = metadata.packages.len();
@@ -194,6 +192,7 @@ impl Analyzer {
         }
     }
 
+    #[allow(clippy::unused_async, reason = "required by async closure signature")]
     async fn analyze_single_file(&self, path: &Path) -> AnalyzeEventIter {
         let sysroot = toolchain::get_sysroot();
         let path = path.to_path_buf();
@@ -218,11 +217,11 @@ impl Analyzer {
         args.push(path.to_string_lossy().to_string());
 
         // Run compiler in a separate thread with panic handling
-        let _handle = tokio::task::spawn_blocking(move || {
+        let _handle = task::spawn_blocking(move || {
             let (ws_receiver, compiler_handle) = compiler::run_compiler_in_thread(args);
 
             // Create a runtime to receive results
-            let rt = tokio::runtime::Builder::new_current_thread()
+            let rt = runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap();
@@ -258,14 +257,14 @@ impl Analyzer {
 pub struct AnalyzeEventIter {
     receiver: mpsc::Receiver<AnalyzerEvent>,
     notify: Arc<Notify>,
-    #[allow(unused)]
+    #[allow(unused, reason = "used to keep child process alive")]
     child: Option<process::Child>,
 }
 impl AnalyzeEventIter {
     pub async fn next_event(&mut self) -> Option<AnalyzerEvent> {
         tokio::select! {
             v = self.receiver.recv() => v,
-            _ = self.notify.notified() => None,
+            () = self.notify.notified() => None,
         }
     }
 }

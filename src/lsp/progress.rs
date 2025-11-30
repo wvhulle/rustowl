@@ -1,5 +1,8 @@
 use serde::Serialize;
-use tower_lsp::{Client, lsp_types};
+use tower_lsp::{
+    Client,
+    lsp_types::{self, notification::Progress, request::WorkDoneProgressCreate},
+};
 
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -17,11 +20,9 @@ impl ProgressToken {
     pub async fn begin(client: Client, message: Option<impl ToString>) -> Self {
         let token = lsp_types::NumberOrString::String(format!("{}", uuid::Uuid::new_v4()));
         client
-            .send_request::<lsp_types::request::WorkDoneProgressCreate>(
-                lsp_types::WorkDoneProgressCreateParams {
-                    token: token.clone(),
-                },
-            )
+            .send_request::<WorkDoneProgressCreate>(lsp_types::WorkDoneProgressCreateParams {
+                token: token.clone(),
+            })
             .await
             .ok();
 
@@ -34,7 +35,7 @@ impl ProgressToken {
             },
         ));
         client
-            .send_notification::<lsp_types::notification::Progress>(lsp_types::ProgressParams {
+            .send_notification::<Progress>(lsp_types::ProgressParams {
                 token: token.clone(),
                 value,
             })
@@ -56,10 +57,7 @@ impl ProgressToken {
                 }),
             );
             client
-                .send_notification::<lsp_types::notification::Progress>(lsp_types::ProgressParams {
-                    token,
-                    value,
-                })
+                .send_notification::<Progress>(lsp_types::ProgressParams { token, value })
                 .await;
         }
     }
@@ -70,10 +68,7 @@ impl ProgressToken {
         ));
         if let (Some(client), Some(token)) = (self.client.take(), self.token.take()) {
             client
-                .send_notification::<lsp_types::notification::Progress>(lsp_types::ProgressParams {
-                    token,
-                    value,
-                })
+                .send_notification::<Progress>(lsp_types::ProgressParams { token, value })
                 .await;
         }
     }
@@ -87,9 +82,7 @@ impl Drop for ProgressToken {
         if let (Some(client), Some(token)) = (self.client.take(), self.token.take()) {
             tokio::spawn(async move {
                 client
-                    .send_notification::<lsp_types::notification::Progress>(
-                        lsp_types::ProgressParams { token, value },
-                    )
+                    .send_notification::<Progress>(lsp_types::ProgressParams { token, value })
                     .await;
             });
         }

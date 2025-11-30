@@ -1,17 +1,6 @@
-<div align="center">
-    <h1>
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rustowl-logo-dark.svg">
-        <img alt="RustOwl" src="docs/assets/rustowl-logo.svg" width="400">
-      </picture>
-    </h1>
-    <p>
-        Visualize ownership and lifetimes in Rust for debugging and optimization
-    </p>
-    <img src="docs/assets/readme-screenshot-3.png" />
-</div>
-
 # RustOwl
+
+_This fork adds support for the Helix editor and other editors that are able to read code actions from an LSP-server and simplifies the codebase considerably._
 
 RustOwl visualizes ownership movement and lifetimes in Rust code. When you save a Rust file, RustOwl analyzes it and shows ownership/lifetime info when you hover over variables or function calls.
 
@@ -56,7 +45,7 @@ RustOwl helps resolve ownership and lifetime errors. It visualizes:
 
 Hover over underlined code for explanations (VS Code example below):
 
-![Hover message on VS Code](assets/readme-screenshot-3.png)
+![Hover message on VS Code](assets/vscode-screenshot.png)
 
 ## Advanced Usage
 

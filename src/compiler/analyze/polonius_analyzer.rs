@@ -1,10 +1,15 @@
-use super::transform::{BorrowData, BorrowMap};
-use crate::{models::*, utils};
+use std::collections::{HashMap, HashSet};
+
 use rayon::prelude::*;
 use rustc_borrowck::consumers::{PoloniusLocationTable, PoloniusOutput};
 use rustc_index::Idx;
 use rustc_middle::mir::Local;
-use std::collections::{HashMap, HashSet};
+
+use super::transform::{BorrowData, BorrowMap};
+use crate::{
+    models::{MirBasicBlock, Range},
+    utils,
+};
 
 pub fn get_accurate_live(
     datafrog: &PoloniusOutput,
@@ -31,7 +36,7 @@ pub fn get_borrow_live(
     let output = datafrog;
     let mut shared_borrows = HashMap::new();
     let mut mutable_borrows = HashMap::new();
-    for (location_idx, borrow_idc) in output.loan_live_at.iter() {
+    for (location_idx, borrow_idc) in &output.loan_live_at {
         let location = location_table.to_rich_location(*location_idx);
         for borrow_idx in borrow_idc {
             match borrow_map.get_from_borrow_index(*borrow_idx) {
@@ -87,7 +92,7 @@ pub fn get_must_live(
 ) -> HashMap<Local, Vec<Range>> {
     // obtain a map that region -> region contained locations
     let mut region_locations = HashMap::new();
-    for (location_idx, region_idc) in datafrog.origin_live_on_entry.iter() {
+    for (location_idx, region_idc) in &datafrog.origin_live_on_entry {
         for region_idx in region_idc {
             region_locations
                 .entry(*region_idx)
@@ -98,7 +103,7 @@ pub fn get_must_live(
 
     // obtain a map that borrow index -> local
     let mut borrow_local = HashMap::new();
-    for (local, borrow_idc) in borrow_map.local_map().iter() {
+    for (local, borrow_idc) in borrow_map.local_map() {
         for borrow_idx in borrow_idc {
             borrow_local.insert(*borrow_idx, *local);
         }
@@ -106,8 +111,8 @@ pub fn get_must_live(
 
     // check all regions' subset that must be satisfied
     let mut subsets = HashMap::new();
-    for (_, subset) in datafrog.subset.iter() {
-        for (sup, subs) in subset.iter() {
+    for subset in datafrog.subset.values() {
+        for (sup, subs) in subset {
             subsets
                 .entry(*sup)
                 .or_insert_with(HashSet::new)
@@ -117,7 +122,7 @@ pub fn get_must_live(
     // obtain a map that region -> locations
     // a region must contains the locations
     let mut region_must_locations = HashMap::new();
-    for (sup, subs) in subsets.iter() {
+    for (sup, subs) in &subsets {
         for sub in subs {
             if let Some(locs) = region_locations.get(sub) {
                 region_must_locations
@@ -130,8 +135,8 @@ pub fn get_must_live(
     // obtain a map that local -> locations
     // a local must lives in the locations
     let mut local_must_locations = HashMap::new();
-    for (_location, region_borrows) in datafrog.origin_contains_loan_at.iter() {
-        for (region, borrows) in region_borrows.iter() {
+    for region_borrows in datafrog.origin_contains_loan_at.values() {
+        for (region, borrows) in region_borrows {
             for borrow in borrows {
                 if let Some(locs) = region_must_locations.get(region)
                     && let Some(local) = borrow_local.get(borrow)
@@ -145,18 +150,21 @@ pub fn get_must_live(
         }
     }
 
-    HashMap::from_iter(local_must_locations.iter().map(|(local, locations)| {
-        (
-            *local,
-            utils::eliminated_ranges(super::transform::rich_locations_to_ranges(
-                basic_blocks,
-                &locations
-                    .iter()
-                    .map(|v| location_table.to_rich_location(*v))
-                    .collect::<Vec<_>>(),
-            )),
-        )
-    }))
+    local_must_locations
+        .iter()
+        .map(|(local, locations)| {
+            (
+                *local,
+                utils::eliminated_ranges(super::transform::rich_locations_to_ranges(
+                    basic_blocks,
+                    &locations
+                        .iter()
+                        .map(|v| location_table.to_rich_location(*v))
+                        .collect::<Vec<_>>(),
+                )),
+            )
+        })
+        .collect::<HashMap<_, _>>()
 }
 
 /// obtain map from local id to living range

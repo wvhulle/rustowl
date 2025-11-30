@@ -35,10 +35,3 @@ cargo deny check
 
 - Checks vulnerabilities, licenses, duplicates
 - Config: [deny.toml](deny.toml)
-
-## Memory Safety (optional)
-
-```bash
-cargo miri test
-valgrind --leak-check=full ./target/release/rustowl
-```

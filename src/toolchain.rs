@@ -1,13 +1,12 @@
-//! Toolchain configuration for RustOwl
-//!
-//! Provides the sysroot path and cargo command setup for MIR analysis.
+use std::{
+    collections::VecDeque,
+    env,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    process::{Command, exit},
+};
 
-use std::collections::VecDeque;
-use std::env;
-use std::path::{Path, PathBuf};
-
-/// Rust toolchain version (set at compile time in build.rs)
-pub const TOOLCHAIN: &str = env!("RUSTOWL_TOOLCHAIN");
+use tokio::process::Command as TokioCommand;
 
 /// Host target triple (set at compile time in build.rs)
 pub const HOST_TUPLE: &str = env!("HOST_TUPLE");
@@ -26,10 +25,7 @@ pub fn get_sysroot() -> PathBuf {
         }
     }
 
-    if let Ok(output) = std::process::Command::new("rustc")
-        .arg("--print")
-        .arg("sysroot")
-        .output()
+    if let Ok(output) = Command::new("rustc").arg("--print").arg("sysroot").output()
         && output.status.success()
     {
         let sysroot = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -40,8 +36,10 @@ pub fn get_sysroot() -> PathBuf {
         }
     }
 
-    log::error!("Could not determine Rust sysroot. Set RUSTOWL_SYSROOT or ensure rustc is in PATH.");
-    std::process::exit(1);
+    log::error!(
+        "Could not determine Rust sysroot. Set RUSTOWL_SYSROOT or ensure rustc is in PATH."
+    );
+    exit(1);
 }
 
 /// Returns the path to the current executable.
@@ -49,12 +47,12 @@ fn current_exe_path() -> PathBuf {
     env::current_exe().expect("Failed to get current executable path")
 }
 
-/// Creates a cargo command configured for RustOwl analysis.
+/// Creates a cargo command configured for `RustOwl` analysis.
 ///
 /// Sets up environment variables so cargo uses the current rustowl binary
 /// as the compiler wrapper.
-pub fn setup_cargo_command() -> tokio::process::Command {
-    let mut command = tokio::process::Command::new("cargo");
+pub fn setup_cargo_command() -> TokioCommand {
+    let mut command = TokioCommand::new("cargo");
     let rustowl = current_exe_path();
     let sysroot = get_sysroot();
 
@@ -62,13 +60,16 @@ pub fn setup_cargo_command() -> tokio::process::Command {
         .env("RUSTC", &rustowl)
         .env("RUSTC_WORKSPACE_WRAPPER", &rustowl)
         .env("RUSTC_BOOTSTRAP", "1")
-        .env("CARGO_ENCODED_RUSTFLAGS", format!("--sysroot={}", sysroot.display()));
+        .env(
+            "CARGO_ENCODED_RUSTFLAGS",
+            format!("--sysroot={}", sysroot.display()),
+        );
 
     prepend_library_path(&mut command, &sysroot);
     command
 }
 
-fn prepend_library_path(command: &mut tokio::process::Command, sysroot: &Path) {
+fn prepend_library_path(command: &mut TokioCommand, sysroot: &Path) {
     let lib_dir = sysroot.join("lib");
 
     #[cfg(target_os = "linux")]
@@ -90,7 +91,7 @@ fn prepend_library_path(command: &mut tokio::process::Command, sysroot: &Path) {
     }
 }
 
-fn prepend_to_path_var(var: &str, new_path: &Path) -> std::ffi::OsString {
+fn prepend_to_path_var(var: &str, new_path: &Path) -> OsString {
     let current = env::var_os(var).unwrap_or_default();
     let mut paths: VecDeque<PathBuf> = env::split_paths(&current).collect();
     paths.push_front(new_path.to_path_buf());

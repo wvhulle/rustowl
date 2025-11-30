@@ -1,4 +1,4 @@
-use crate::models::*;
+use crate::models::{Function, Loc, MirDecl, MirStatement, MirTerminator, Range};
 
 pub fn is_super_range(r1: Range, r2: Range) -> bool {
     (r1.from() < r2.from() && r2.until() <= r1.until())
@@ -60,7 +60,7 @@ pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     ranges
 }
 
-pub fn exclude_ranges(mut from: Vec<Range>, excludes: Vec<Range>) -> Vec<Range> {
+pub fn exclude_ranges(mut from: Vec<Range>, excludes: &[Range]) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < from.len() {
         let mut j = 0;
@@ -82,7 +82,7 @@ pub fn exclude_ranges(mut from: Vec<Range>, excludes: Vec<Range>) -> Vec<Range> 
     eliminated_ranges(from)
 }
 
-#[allow(unused)]
+#[allow(unused, reason = "trait-based visitor pattern")]
 pub trait MirVisitor {
     fn visit_func(&mut self, func: &Function) {}
     fn visit_decl(&mut self, decl: &MirDecl) {}
@@ -108,8 +108,12 @@ pub fn index_to_line_char(s: &str, idx: Loc) -> (u32, u32) {
     let mut line = 0;
     let mut col = 0;
     // it seems that the compiler is ignoring CR
-    for (i, c) in s.replace("\r", "").chars().enumerate() {
-        if idx == Loc::from(i as u32) {
+    for (i, c) in s.replace('\r', "").chars().enumerate() {
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "source files are typically less than 2^32 characters"
+        )]
+        if idx == Loc::from(u32::try_from(i).unwrap_or(u32::MAX)) {
             return (line, col);
         }
         if c == '\n' {
@@ -124,9 +128,13 @@ pub fn index_to_line_char(s: &str, idx: Loc) -> (u32, u32) {
 pub fn line_char_to_index(s: &str, mut line: u32, char: u32) -> u32 {
     let mut col = 0;
     // it seems that the compiler is ignoring CR
-    for (i, c) in s.replace("\r", "").chars().enumerate() {
+    for (i, c) in s.replace('\r', "").chars().enumerate() {
         if line == 0 && col == char {
-            return i as u32;
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "source files are typically less than 2^32 characters"
+            )]
+            return u32::try_from(i).unwrap_or(0);
         }
         if c == '\n' && 0 < line {
             line -= 1;

@@ -1,5 +1,8 @@
-use std::env;
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
+
 use tokio::process::Command;
 
 pub fn is_cache() -> bool {

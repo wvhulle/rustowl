@@ -1,10 +1,13 @@
-//! MIR analyzer initialization and analysis
+#![allow(
+    clippy::absolute_paths,
+    reason = "paths used in compiler plugin context"
+)]
 
 mod polonius_analyzer;
 mod transform;
 
-use super::cache;
-use crate::models::*;
+use std::{collections::HashMap, fs::read_to_string, future::Future, pin::Pin};
+
 use rustc_borrowck::consumers::{
     ConsumerOptions, PoloniusInput, PoloniusOutput, get_body_with_borrowck_facts,
 };
@@ -14,9 +17,9 @@ use rustc_middle::{
     ty::TyCtxt,
 };
 use rustc_span::Span;
-use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
+
+use super::cache;
+use crate::models::{FnLocal, Function, Loc, MirBasicBlock, MirDecl, Range};
 
 pub type MirAnalyzeFuture = Pin<Box<dyn Future<Output = MirAnalyzer> + Send + Sync>>;
 
@@ -77,7 +80,7 @@ impl MirAnalyzer {
             &rustc_span::RealFileName::LocalPath(std::env::current_dir().unwrap()),
         );
         let path = file_name.to_path(rustc_span::FileNameDisplayPreference::Local);
-        let source = std::fs::read_to_string(path).unwrap();
+        let source = read_to_string(path).unwrap();
         let file_name = path.to_string_lossy().to_string();
         log::info!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
 
@@ -111,7 +114,7 @@ impl MirAnalyzer {
                 file_name,
                 file_hash,
                 mir_hash,
-                analyzed: analyzed.clone(),
+                analyzed,
             });
         }
         drop(cache);
@@ -164,11 +167,11 @@ impl MirAnalyzer {
             let drop_range =
                 polonius_analyzer::drop_range(&output_datafrog, &location_table, &basic_blocks);
 
-            MirAnalyzer {
+            Self {
                 file_name,
                 local_decls,
-                input,
                 user_vars,
+                input,
                 basic_blocks,
                 fn_id,
                 file_hash,
@@ -232,7 +235,7 @@ impl MirAnalyzer {
     }
 
     fn is_drop(&self, local: Local) -> bool {
-        for (drop_local, _) in self.input.var_dropped_at.iter() {
+        for (drop_local, _) in &self.input.var_dropped_at {
             if *drop_local == local {
                 return true;
             }
@@ -241,6 +244,7 @@ impl MirAnalyzer {
     }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
+    #[must_use]
     pub fn analyze(self) -> AnalyzeResult {
         let decls = self.collect_decls();
         let basic_blocks = self.basic_blocks;

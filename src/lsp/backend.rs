@@ -1,20 +1,26 @@
-use super::analyze::*;
-use crate::{lsp::*, models::*, utils};
-use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::{sync::RwLock, task::JoinSet};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+use tokio::{sync::RwLock, task::JoinSet, time};
 use tokio_util::sync::CancellationToken;
-use tower_lsp::jsonrpc;
-use tower_lsp::lsp_types;
-use tower_lsp::{Client, LanguageServer, LspService};
+use tower_lsp::{Client, LanguageServer, LspService, jsonrpc, lsp_types};
+
+use super::analyze::{Analyzer, AnalyzerEvent};
+use crate::{
+    lsp::{decoration, progress},
+    models::{Crate, Loc},
+    utils,
+};
 
 /// Commands supported by workspace/executeCommand
 pub const CMD_TOGGLE_OWNERSHIP: &str = "rustowl.toggleOwnership";
 pub const CMD_ENABLE_OWNERSHIP: &str = "rustowl.enableOwnership";
 pub const CMD_DISABLE_OWNERSHIP: &str = "rustowl.disableOwnership";
 pub const CMD_ANALYZE: &str = "rustowl.analyze";
-pub const CMD_ANALYZE_ALL_TARGETS: &str = "rustowl.analyzeAllTargets";
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -25,11 +31,11 @@ pub struct AnalyzeResponse {}
 /// Tracks whether ownership diagnostics are enabled for each document
 #[derive(Default, Clone)]
 struct OwnershipState {
-    /// Map from file path to (enabled, cursor_position)
+    /// Map from file path to (enabled, `cursor_position`)
     enabled_files: HashMap<PathBuf, (bool, Option<lsp_types::Position>)>,
 }
 
-/// RustOwl LSP server backend
+/// `RustOwl` LSP server backend
 pub struct Backend {
     client: Client,
     analyzers: Arc<RwLock<Vec<Analyzer>>>,
@@ -84,7 +90,7 @@ impl Backend {
 
     async fn analyze_with_options(&self, all_targets: bool, all_features: bool) {
         log::info!("wait 100ms for rust-analyzer");
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        time::sleep(time::Duration::from_millis(100)).await;
 
         log::info!("stop running analysis processes");
         self.shutdown_subprocesses().await;
@@ -105,27 +111,30 @@ impl Backend {
             let cancellation_token_key = {
                 let token = cancellation_token.clone();
                 let mut tokens = self.process_tokens.write().await;
-                let key = if let Some(key) = tokens.last_entry().map(|v| *v.key()) {
-                    key + 1
-                } else {
-                    1
-                };
+                let key = tokens
+                    .last_entry()
+                    .map(|v| *v.key())
+                    .map_or(1, |key| key + 1);
                 tokens.insert(key, token);
                 key
             };
 
             let process_tokens = self.process_tokens.clone();
             self.processes.write().await.spawn(async move {
-                let mut progress_token = None;
-                if *work_done_progress.read().await {
-                    progress_token =
-                        Some(progress::ProgressToken::begin(client, None::<&str>).await)
+                #[allow(
+                    clippy::if_then_some_else_none,
+                    reason = "cannot use bool::then with async await"
+                )]
+                let progress_token = if *work_done_progress.read().await {
+                    Some(progress::ProgressToken::begin(client.clone(), None::<&str>).await)
+                } else {
+                    None
                 };
 
                 let mut iter = analyzer.analyze(all_targets, all_features).await;
                 let mut analyzed_package_count = 0;
                 while let Some(event) = tokio::select! {
-                    _ = cancellation_token.cancelled() => None,
+                    () = cancellation_token.cancelled() => None,
                     event = iter.next_event() => event,
                 } {
                     match event {
@@ -137,10 +146,15 @@ impl Backend {
                             if let Some(token) = &progress_token {
                                 let percentage =
                                     (analyzed_package_count * 100 / package_count).min(100);
+                                #[allow(
+                                    clippy::cast_possible_truncation,
+                                    reason = "percentage is 0-100"
+                                )]
+                                let percentage_u32 = percentage as u32;
                                 token
                                     .report(
                                         Some(format!("{package} analyzed")),
-                                        Some(percentage as u32),
+                                        Some(percentage_u32),
                                     )
                                     .await;
                             }
@@ -174,7 +188,7 @@ impl Backend {
             let mut status = status.write().await;
             let analyzed = analyzed.write().await;
             if *status != progress::AnalysisStatus::Error {
-                if analyzed.as_ref().map(|v| v.0.len()).unwrap_or(0) == 0 {
+                if analyzed.as_ref().map_or(0, |v| v.0.len()) == 0 {
                     *status = progress::AnalysisStatus::Error;
                 } else {
                     *status = progress::AnalysisStatus::Finished;
@@ -196,7 +210,7 @@ impl Backend {
                 analyzed.0.len()
             );
             let mut found_file = false;
-            for (filename, file) in analyzed.0.iter() {
+            for (filename, file) in &analyzed.0 {
                 if filepath == PathBuf::from(filename) {
                     found_file = true;
                     log::warn!("Found file {filename}, {} items", file.items.len());
@@ -210,14 +224,15 @@ impl Backend {
             }
             if !found_file {
                 log::warn!(
-                    "File {filepath:?} not found in analysis results. Available files: {:?}",
+                    "File {} not found in analysis results. Available files: {:?}",
+                    filepath.display(),
                     analyzed.0.keys().collect::<Vec<_>>()
                 );
             }
 
             log::warn!("Selected local: {:?}", selected.selected());
             let mut calc = decoration::CalcDecos::new(selected.selected().iter().copied());
-            for (filename, file) in analyzed.0.iter() {
+            for (filename, file) in &analyzed.0 {
                 if filepath == PathBuf::from(filename) {
                     for item in &file.items {
                         utils::mir_visit(item, &mut calc);
@@ -227,10 +242,10 @@ impl Backend {
             calc.handle_overlapping();
             let decos = calc.decorations();
             log::warn!("Calculated {} decorations", decos.len());
-            if !decos.is_empty() {
-                Ok(decos)
-            } else {
+            if decos.is_empty() {
                 Err(error)
+            } else {
+                Ok(decos)
             }
         } else {
             log::warn!("No analysis data available yet");
@@ -245,7 +260,7 @@ impl Backend {
         let is_analyzed = self.analyzed.read().await.is_some();
         let status = *self.status.read().await;
         if let Some(path) = params.path()
-            && let Ok(text) = std::fs::read_to_string(&path)
+            && let Ok(text) = fs::read_to_string(&path)
         {
             let position = params.position();
             let pos = Loc(utils::line_char_to_index(
@@ -282,8 +297,11 @@ impl Backend {
 
     /// Publish ownership decorations as standard LSP diagnostics for a file
     async fn publish_ownership_diagnostics(&self, path: &Path, position: lsp_types::Position) {
-        log::warn!("publish_ownership_diagnostics called for {path:?} at {position:?}");
-        if let Ok(text) = std::fs::read_to_string(path) {
+        log::warn!(
+            "publish_ownership_diagnostics called for {} at {position:?}",
+            path.display()
+        );
+        if let Ok(text) = fs::read_to_string(path) {
             let pos = Loc(utils::line_char_to_index(
                 &text,
                 position.line,
@@ -310,7 +328,7 @@ impl Backend {
                 .publish_diagnostics(uri, diagnostics, None)
                 .await;
         } else {
-            log::error!("Failed to read file {path:?}");
+            log::error!("Failed to read file {}", path.display());
         }
     }
 
@@ -338,7 +356,10 @@ impl Backend {
                 // Arguments: [document_uri, line, character]
                 if let Some(args) = Self::parse_position_args(&params.arguments) {
                     let (path, position) = args;
-                    log::warn!("Parsed args: path={:?}, position={:?}", path, position);
+                    log::warn!(
+                        "Parsed args: path={}, position={position:?}",
+                        path.display()
+                    );
                     let mut state = self.ownership_state.write().await;
                     let entry = state
                         .enabled_files
@@ -350,10 +371,10 @@ impl Backend {
                     drop(state);
 
                     if enabled {
-                        log::warn!("Publishing ownership diagnostics for {:?}", path);
+                        log::warn!("Publishing ownership diagnostics for {}", path.display());
                         self.publish_ownership_diagnostics(&path, position).await;
                     } else {
-                        log::warn!("Clearing ownership diagnostics for {:?}", path);
+                        log::warn!("Clearing ownership diagnostics for {}", path.display());
                         self.clear_ownership_diagnostics(&path).await;
                     }
                     Ok(Some(serde_json::json!({ "enabled": enabled })))
@@ -400,7 +421,7 @@ impl Backend {
         }
     }
 
-    /// Parse position arguments from command: [uri_string, line, character]
+    /// Parse position arguments from command: [`uri_string`, line, character]
     fn parse_position_args(args: &[serde_json::Value]) -> Option<(PathBuf, lsp_types::Position)> {
         if args.is_empty() {
             return None;
@@ -409,14 +430,20 @@ impl Backend {
         let uri = lsp_types::Url::parse(uri_str).ok()?;
         let path = uri.to_file_path().ok()?;
 
-        let line = args.get(1).and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-        let character = args.get(2).and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "LSP positions are typically small"
+        )]
+        let line = u32::try_from(args.get(1).and_then(serde_json::Value::as_u64).unwrap_or(0))
+            .unwrap_or(0);
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "LSP positions are typically small"
+        )]
+        let character = u32::try_from(args.get(2).and_then(serde_json::Value::as_u64).unwrap_or(0))
+            .unwrap_or(0);
 
         Some((path, lsp_types::Position { line, character }))
-    }
-
-    pub async fn check(path: impl AsRef<Path>) -> bool {
-        Self::check_with_options(path, false, false).await
     }
 
     pub async fn check_with_options(
@@ -425,7 +452,7 @@ impl Backend {
         all_features: bool,
     ) -> bool {
         let path = path.as_ref();
-        let (service, _) = LspService::build(Backend::new).finish();
+        let (service, _) = LspService::build(Self::new).finish();
         let backend = service.inner();
 
         if backend.add_analyze_target(path).await {
@@ -438,8 +465,7 @@ impl Backend {
                 .read()
                 .await
                 .as_ref()
-                .map(|v| !v.0.is_empty())
-                .unwrap_or(false)
+                .is_some_and(|v| !v.0.is_empty())
         } else {
             false
         }
@@ -497,7 +523,7 @@ impl LanguageServer for Backend {
                 CMD_DISABLE_OWNERSHIP.to_string(),
                 CMD_ANALYZE.to_string(),
             ],
-            work_done_progress_options: Default::default(),
+            work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
         };
         // Advertise code action support
         let code_action_provider = lsp_types::CodeActionProviderCapability::Simple(true);
@@ -515,10 +541,11 @@ impl LanguageServer for Backend {
         let health_checker = async move {
             if let Some(process_id) = params.process_id {
                 loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-                    if !process_alive::state(process_alive::Pid::from(process_id)).is_alive() {
-                        panic!("The client process is dead");
-                    }
+                    time::sleep(time::Duration::from_secs(30)).await;
+                    assert!(
+                        process_alive::state(process_alive::Pid::from(process_id)).is_alive(),
+                        "The client process is dead"
+                    );
                 }
             }
         };
@@ -580,8 +607,7 @@ impl LanguageServer for Backend {
                 .await
                 .enabled_files
                 .get(&path)
-                .map(|(enabled, _)| *enabled)
-                .unwrap_or(false)
+                .is_some_and(|(enabled, _)| *enabled)
         } else {
             false
         };

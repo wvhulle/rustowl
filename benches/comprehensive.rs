@@ -1,16 +1,14 @@
+use std::{hint::black_box, path::Path, process::Command};
+
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
-use std::path::Path;
-use std::process::Command;
 
 fn bench_rustowl_check(c: &mut Criterion) {
     let binary_path = "./target/release/rustowl";
 
-    if !Path::new(binary_path).exists() {
-        panic!(
-            "Binary not found at {binary_path}. Run 'cargo build --release --bin rustowl' first."
-        );
-    }
+    assert!(
+        Path::new(binary_path).exists(),
+        "Binary not found at {binary_path}. Run 'cargo build --release --bin rustowl' first."
+    );
 
     let test_fixture = "./benches/perf-tests";
 
@@ -21,7 +19,7 @@ fn bench_rustowl_check(c: &mut Criterion) {
                 .output()
                 .expect("Failed to run rustowl check");
             black_box(output.status.success());
-        })
+        });
     });
 }
 

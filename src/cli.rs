@@ -1,7 +1,10 @@
+use std::{env, io, io::Write, path::PathBuf, process::exit};
+
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::generate;
-use std::io::Write;
-use std::{env, io};
+use tokio::fs::remove_dir_all;
+
+use crate::shells::Shell;
 
 #[derive(Debug, Parser)]
 #[command(author)]
@@ -34,7 +37,7 @@ pub enum Commands {
     Completions {
         /// The shell to generate completions for.
         #[arg(value_enum)]
-        shell: crate::shells::Shell,
+        shell: Shell,
     },
 
     /// Generate a man page for the CLI.
@@ -45,7 +48,7 @@ pub enum Commands {
 pub struct Check {
     /// The path of a file or directory to check availability.
     #[arg(value_name("path"), value_hint(ValueHint::AnyPath))]
-    pub path: Option<std::path::PathBuf>,
+    pub path: Option<PathBuf>,
 
     /// Whether to check for all targets
     /// (default: false).
@@ -72,7 +75,7 @@ impl Commands {
     /// Execute the command.
     pub async fn execute(self) {
         match self {
-            Commands::Check(options) => {
+            Self::Check(options) => {
                 let path = options.path.unwrap_or_else(|| env::current_dir().unwrap());
 
                 if crate::Backend::check_with_options(
@@ -83,23 +86,23 @@ impl Commands {
                 .await
                 {
                     log::info!("Successfully analyzed");
-                    std::process::exit(0);
+                    exit(0);
                 }
                 log::error!("Analyze failed");
-                std::process::exit(1);
+                exit(1);
             }
-            Commands::Clean => {
+            Self::Clean => {
                 if let Ok(meta) = cargo_metadata::MetadataCommand::new().exec() {
                     let target = meta.target_directory.join("owl");
-                    tokio::fs::remove_dir_all(&target).await.ok();
+                    remove_dir_all(&target).await.ok();
                 }
             }
-            Commands::Completions { shell } => {
+            Self::Completions { shell } => {
                 generate(shell, &mut Cli::command(), "rustowl", &mut io::stdout());
             }
-            Commands::Manpage => {
+            Self::Manpage => {
                 let man = clap_mangen::Man::new(Cli::command());
-                let mut buffer: Vec<u8> = Default::default();
+                let mut buffer: Vec<u8> = Vec::default();
                 man.render(&mut buffer).unwrap();
                 io::stdout().write_all(&buffer).unwrap();
             }

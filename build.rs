@@ -1,7 +1,4 @@
-use clap::CommandFactory;
-use clap_complete::generate_to;
 use std::env;
-use std::fs;
 use std::io::Error;
 use std::process::Command;
 

@@ -39,7 +39,7 @@ impl Analyzer {
     pub async fn new(path: impl AsRef<Path>) -> Result<Self, ()> {
         let path = path.as_ref().to_path_buf();
 
-        let mut cargo_cmd = toolchain::setup_cargo_command().await;
+        let mut cargo_cmd = toolchain::setup_cargo_command();
 
         cargo_cmd
             .args([
@@ -110,7 +110,7 @@ impl Analyzer {
         let package_name = metadata.root_package().as_ref().unwrap().name.to_string();
         let target_dir = metadata.target_directory.as_std_path().join("owl");
         log::info!("clear cargo cache");
-        let mut command = toolchain::setup_cargo_command().await;
+        let mut command = toolchain::setup_cargo_command();
         command
             .args(["clean", "--package", &package_name])
             .env("CARGO_TARGET_DIR", &target_dir)
@@ -119,7 +119,7 @@ impl Analyzer {
             .stderr(std::process::Stdio::null());
         command.spawn().unwrap().wait().await.ok();
 
-        let mut command = toolchain::setup_cargo_command().await;
+        let mut command = toolchain::setup_cargo_command();
 
         let mut args = vec!["check", "--workspace"];
         if all_targets {
@@ -191,8 +191,8 @@ impl Analyzer {
     }
 
     async fn analyze_single_file(&self, path: &Path) -> AnalyzeEventIter {
-        let sysroot = toolchain::get_sysroot().await;
-        let rustowlc_path = toolchain::get_executable_path("rustowlc").await;
+        let sysroot = toolchain::get_sysroot();
+        let rustowlc_path = toolchain::get_executable_path("rustowlc");
 
         let mut command = process::Command::new(&rustowlc_path);
         command

@@ -1,4 +1,7 @@
-use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
+use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueHint};
+use clap_complete::generate;
+use std::{env, io};
+use std::io::Write;
 
 #[derive(Debug, Parser)]
 #[command(author)]
@@ -27,11 +30,12 @@ pub enum Commands {
     /// Remove artifacts from the target directory.
     Clean,
 
-    /// Install or uninstall the toolchain.
-    Toolchain(ToolchainArgs),
-
     /// Generate shell completions.
-    Completions(Completions),
+    Completions {
+        /// The shell to generate completions for.
+        #[arg(value_enum)]
+        shell: crate::shells::Shell,
+    },
 
     /// Generate a man page for the CLI.
     Manpage,
@@ -64,38 +68,57 @@ pub struct Check {
     pub all_features: bool,
 }
 
-#[derive(Args, Debug)]
-pub struct ToolchainArgs {
-    #[command(subcommand)]
-    pub command: Option<ToolchainCommands>,
+impl Commands {
+    /// Execute the command.
+    pub async fn execute(self) {
+        match self {
+            Commands::Check(options) => {
+                let path = options.path.unwrap_or_else(|| env::current_dir().unwrap());
+
+                if crate::Backend::check_with_options(
+                    &path,
+                    options.all_targets,
+                    options.all_features,
+                )
+                .await
+                {
+                    log::info!("Successfully analyzed");
+                    std::process::exit(0);
+                }
+                log::error!("Analyze failed");
+                std::process::exit(1);
+            }
+            Commands::Clean => {
+                if let Ok(meta) = cargo_metadata::MetadataCommand::new().exec() {
+                    let target = meta.target_directory.join("owl");
+                    tokio::fs::remove_dir_all(&target).await.ok();
+                }
+            }
+            Commands::Completions { shell } => {
+                generate(shell, &mut Cli::command(), "rustowl", &mut io::stdout());
+            }
+            Commands::Manpage => {
+                let man = clap_mangen::Man::new(Cli::command());
+                let mut buffer: Vec<u8> = Default::default();
+                man.render(&mut buffer).unwrap();
+                io::stdout().write_all(&buffer).unwrap();
+            }
+        }
+    }
 }
 
-#[derive(Debug, Subcommand)]
-pub enum ToolchainCommands {
-    /// Install the toolchain.
-    Install {
-        #[arg(
-            long,
-            value_name("path"),
-            value_hint(ValueHint::AnyPath),
-            help = "Runtime directory path to install RustOwl toolchain"
-        )]
-        path: Option<std::path::PathBuf>,
-        #[arg(
-            long,
-            value_name("skip-rustowl-toolchain"),
-            help = "Install Rust toolchain only"
-        )]
-        skip_rustowl_toolchain: bool,
-    },
-
-    /// Uninstall the toolchain.
-    Uninstall,
-}
-
-#[derive(Args, Debug)]
-pub struct Completions {
-    /// The shell to generate completions for.
-    #[arg(value_enum)]
-    pub shell: crate::shells::Shell,
+impl Cli {
+    /// Run the CLI application.
+    pub async fn run(self) {
+        if let Some(command) = self.command {
+            command.execute().await;
+        } else if self.version {
+            if self.quiet == 0 {
+                print!("RustOwl ");
+            }
+            println!("v{}", clap::crate_version!());
+        } else {
+            crate::start_lsp_server().await;
+        }
+    }
 }

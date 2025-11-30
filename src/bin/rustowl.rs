@@ -142,7 +142,7 @@ async fn start_lsp_server() {
 
 #[tokio::main]
 async fn main() {
-    rustls::crypto::aws_lc_rs::default_provider()
+    rustls::crypto::ring::default_provider()
         .install_default()
         .expect("crypto provider already installed");
 

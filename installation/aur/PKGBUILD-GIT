@@ -5,11 +5,11 @@ pkgname=rustowl-git
 pkgver=r1.0
 pkgrel=1
 pkgdesc='Visualize Ownership and Lifetimes in Rust'
-url='https://github.com/cordx56/rustowl'
+url='https://github.com/wvhulle/rustowl'
 license=('MPL-2.0')
 makedepends=('git' 'rustup' 'zig=0.13.0')
 arch=('any')
-source=("git+https://github.com/cordx56/rustowl.git")
+source=("git+https://github.com/wvhulle/rustowl.git")
 sha256sums=('SKIP')
 conflicts=('rustowl-bin' 'rustowl')
 

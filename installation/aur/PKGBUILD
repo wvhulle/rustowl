@@ -5,13 +5,13 @@ pkgname=rustowl
 pkgver=0.3.4
 pkgrel=1
 pkgdesc='Visualize Ownership and Lifetimes in Rust'
-url='https://github.com/cordx56/rustowl'
+url='https://github.com/wvhulle/rustowl'
 license=('MPL-2.0')
 makedepends=('rustup')
 depends=()
 conflicts=('rustowl-git' 'rustowl-bin')
 arch=('any')
-source=("https://github.com/cordx56/rustowl/archive/refs/tags/v${pkgver}.tar.gz")
+source=("https://github.com/wvhulle/rustowl/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('fa120643aeb48061eb32a7c993dabff88aa4e9d0b32f8ab0f3289b3fb2cf5744')
 
 prepare() {

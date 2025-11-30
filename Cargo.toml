@@ -29,7 +29,7 @@ pkg-fmt = "zip"
 
 [[bench]]
 harness = false
-name = "rustowl_bench_simple"
+name = "comprehensive"
 
 [dependencies]
 cargo_metadata = "0.23"

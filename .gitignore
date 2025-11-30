@@ -1,11 +1,11 @@
 **/target
-perf-tests/dummy-package/Cargo.lock
+perf-tests/Cargo.lock
 scripts/node_modules
 
 # Benchmark and size baselines are machine-specific and should not be committed
 baselines/
 
-# Nix stuff can be ignored, see https://github.com/cordx56/rustowl/issues/59
+# Nix stuff can be ignored, see https://github.com/wvhulle/rustowl/issues/59
 result*
 .envrc
 .luarc.json

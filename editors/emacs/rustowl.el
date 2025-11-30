@@ -7,7 +7,7 @@
 
 ;; Version: 0.2.0
 ;; Package-Requires: ((emacs "24.1") (lsp-mode "9.0.0"))
-;; URL: https://github.com/cordx56/rustowl
+;; URL: https://github.com/wvhulle/rustowl
 
 ;; SPDX-License-Identifier: MPL-2.0
 
@@ -21,7 +21,7 @@
   "Visualize Ownership and Lifetimes in Rust"
   :group 'tools
   :prefix "rustowl-"
-  :link '(url-link "https://github.com/cordx56/rustowl"))
+  :link '(url-link "https://github.com/wvhulle/rustowl"))
 
 ;;;###autoload
 (with-eval-after-load 'lsp-mode

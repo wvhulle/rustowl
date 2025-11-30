@@ -4,7 +4,7 @@ use std::process::Command;
 use std::time::Duration;
 
 fn bench_rustowl_check(c: &mut Criterion) {
-    let dummy_package = "./perf-tests/dummy-package";
+    let test_fixture = "./perf-tests";
 
     let mut group = c.benchmark_group("rustowl_check");
     group
@@ -30,7 +30,7 @@ fn bench_rustowl_check(c: &mut Criterion) {
     group.bench_function("default", |b| {
         b.iter(|| {
             let output = Command::new(binary_path)
-                .args(["check", dummy_package])
+                .args(["check", test_fixture])
                 .output()
                 .expect("Failed to run rustowl check");
             black_box(output.status.success());
@@ -40,7 +40,7 @@ fn bench_rustowl_check(c: &mut Criterion) {
     group.bench_function("all_targets", |b| {
         b.iter(|| {
             let output = Command::new(binary_path)
-                .args(["check", dummy_package, "--all-targets"])
+                .args(["check", test_fixture, "--all-targets"])
                 .output()
                 .expect("Failed to run rustowl check with all targets");
             black_box(output.status.success());
@@ -50,7 +50,7 @@ fn bench_rustowl_check(c: &mut Criterion) {
     group.bench_function("all_features", |b| {
         b.iter(|| {
             let output = Command::new(binary_path)
-                .args(["check", dummy_package, "--all-features"])
+                .args(["check", test_fixture, "--all-features"])
                 .output()
                 .expect("Failed to run rustowl check with all features");
             black_box(output.status.success());
@@ -61,7 +61,7 @@ fn bench_rustowl_check(c: &mut Criterion) {
 }
 
 fn bench_rustowl_comprehensive(c: &mut Criterion) {
-    let dummy_package = "./perf-tests/dummy-package";
+    let test_fixture = "./perf-tests";
     let binary_path = "./target/release/rustowl";
 
     let mut group = c.benchmark_group("rustowl_comprehensive");
@@ -73,7 +73,7 @@ fn bench_rustowl_comprehensive(c: &mut Criterion) {
     group.bench_function("comprehensive", |b| {
         b.iter(|| {
             let output = Command::new(binary_path)
-                .args(["check", dummy_package, "--all-targets", "--all-features"])
+                .args(["check", test_fixture, "--all-targets", "--all-features"])
                 .output()
                 .expect("Failed to run comprehensive rustowl check");
             black_box(output.status.success());

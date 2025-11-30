@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 MIN_RUST_VERSION="1.89.0"
-TEST_TARGET_PATH="./perf-tests/dummy-package"
+TEST_TARGET_PATH="./perf-tests"
 
 # Output logging configuration
 SECURITY_LOG_DIR="./security-logs"
@@ -670,9 +670,8 @@ run_valgrind_tests() {
     echo "Valgrind detects memory errors, leaks, and memory corruption"
     echo ""
     
-    # Build RustOwl for Valgrind testing (use release profile for better performance)
     echo -e "${BLUE}Building RustOwl for Valgrind testing...${NC}"
-    if ! ./scripts/build/toolchain cargo build --release >/dev/null 2>&1; then
+    if ! cargo build --release >/dev/null 2>&1; then
         echo -e "${RED}[FAIL] Failed to build RustOwl for Valgrind testing${NC}"
         return 1
     fi

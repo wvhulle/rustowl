@@ -78,7 +78,7 @@ jobs:
 
       - name: Check the functionality
         run: |
-          ./target/${{ env.host_tuple }}/${{ env.build_profile }}/rustowl${{ env.exec_ext }} check ./perf-tests/dummy-package
+          ./target/${{ env.host_tuple }}/${{ env.build_profile }}/rustowl${{ env.exec_ext }} check ./perf-tests
 
       - name: Set archive name
         run: |

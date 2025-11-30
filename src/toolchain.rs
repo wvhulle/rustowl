@@ -263,7 +263,7 @@ pub async fn setup_rustowl_toolchain(dest: impl AsRef<Path>) -> Result<(), ()> {
     #[cfg(not(target_os = "windows"))]
     let rustowl_toolchain_result = {
         let rustowl_tarball_url = format!(
-            "https://github.com/cordx56/rustowl/releases/download/v{}/rustowl-{HOST_TUPLE}.tar.gz",
+            "https://github.com/wvhulle/rustowl/releases/download/v{}/rustowl-{HOST_TUPLE}.tar.gz",
             clap::crate_version!(),
         );
         download_tarball_and_extract(&rustowl_tarball_url, dest.as_ref()).await
@@ -271,7 +271,7 @@ pub async fn setup_rustowl_toolchain(dest: impl AsRef<Path>) -> Result<(), ()> {
     #[cfg(target_os = "windows")]
     let rustowl_toolchain_result = {
         let rustowl_zip_url = format!(
-            "https://github.com/cordx56/rustowl/releases/download/v{}/rustowl-{HOST_TUPLE}.zip",
+            "https://github.com/wvhulle/rustowl/releases/download/v{}/rustowl-{HOST_TUPLE}.zip",
             clap::crate_version!(),
         );
         download_zip_and_extract(&rustowl_zip_url, dest.as_ref()).await

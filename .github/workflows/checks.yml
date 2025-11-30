@@ -56,7 +56,7 @@ jobs:
         run: ./scripts/build/toolchain cargo install --path .
 
       - name: Test rustowl check
-        run: rustowl check ./perf-tests/dummy-package
+        run: rustowl check ./perf-tests
 
   vscode:
     name: VS Code Extension Checks

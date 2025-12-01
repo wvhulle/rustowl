@@ -1,8 +1,6 @@
 # FerrousOwl
 
-FerrousOwl visualizes ownership movement and lifetimes in Rust code. When you save a Rust file, FerrousOwl analyzes it and shows ownership/lifetime info when you hover over variables or function calls (or use a code action).
-
-FerrousOwl uses colored underlines:
+FerrousOwl visualizes ownership movement and lifetimes in Rust code using colored underlines:
 
 - 🟩 Green: variable's actual lifetime
 - 🟦 Blue: immutable borrow
@@ -10,7 +8,20 @@ FerrousOwl uses colored underlines:
 - 🟧 Orange: value moved / function call
 - 🟥 Red: lifetime error (invalid overlap or mismatch)
 
-Move the cursor over a variable or function call and wait a few seconds to visualize info.
+## Usage
+
+It should be straight-forward to use this extension:
+
+1. Open a Rust file
+2. Click on a variable in your code.
+3. Open the command panel of VS Code (with CTRL+SHIFT+P).
+4. Type `FerrousOwl: Toggle` and press enter.
+
+This will show the movement of ownership of the focused variable through the neighbouring code.
+
+Move your mouse over the neighbouring underlined code to see what their relation is with the variable focused in the editor.
+
+You can also enable automatic highlighting using the command `FerrousOwl: Cycle`.
 
 ## Installation
 

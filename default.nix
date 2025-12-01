@@ -13,7 +13,7 @@
   fetchFromGitHub ? pkgs.fetchFromGitHub,
 }:
 let
-  meta = builtins.fromTOML (pkgs.lib.readFile ../../Cargo.toml);
+  meta = builtins.fromTOML (pkgs.lib.readFile ./Cargo.toml);
 
   fenix = pkgs.callPackage (fetchFromGitHub {
     owner = "nix-community";
@@ -23,7 +23,7 @@ let
   }) { };
 
   toolchain = fenix.fromToolchainFile {
-    file = ../../rust-toolchain.toml;
+    file = ./rust-toolchain.toml;
   };
 
   rustPlatform = pkgs.makeRustPlatform {
@@ -35,10 +35,10 @@ rustPlatform.buildRustPackage {
   pname = meta.package.name;
   version = meta.package.version;
 
-  src = pkgs.lib.cleanSource ../..;
+  src = pkgs.lib.cleanSource ./.;
 
   cargoLock = {
-    lockFile = ../../Cargo.lock;
+    lockFile = ./Cargo.lock;
   };
 
   nativeBuildInputs = [

@@ -2,9 +2,7 @@
 
 _This fork adds support for the Helix editor and other editors that are able to read code actions from an LSP-server and simplifies the codebase considerably._
 
-RustOwl visualizes ownership movement and lifetimes in Rust code. When you save a Rust file, RustOwl analyzes it and shows ownership/lifetime info when you hover over variables or function calls.
-
-## How It Works
+RustOwl visualizes ownership movement and lifetimes in Rust code. When you save a Rust file, RustOwl analyzes it and shows ownership/lifetime info when you hover over variables or function calls (or use a code action).
 
 RustOwl uses colored underlines:
 
@@ -18,52 +16,29 @@ Move the cursor over a variable or function call and wait ~2 seconds to visualiz
 
 ## Installation
 
-First install the `rustowl` binary:
+Prerequisites:
 
-- Package managers: see [installation/README.md](installation/README.md)
-- Build from source: see [installation/source/README.md](installation/source/README.md)
+- `rustup` ([install](https://rustup.rs/))
+- C compiler (`gcc`, `clang`, or Visual Studio on Windows)
+
+RustOwl requires a nightly Rust toolchain, which will be installed automatically by `rustup` based on [rust-toolchain.toml](rust-toolchain.toml).
+
+```bash
+git clone git@github.com:wvhulle/rustowl.git /tmp/rustowl
+cd /tmp/rustowl
+cargo install --path . --locked
+```
 
 Then, complete the editor setup: see [editors/](./editors/)
 
-## Getting Started
+## Usage
 
 1. Open a Rust file in your editor (must be part of a Cargo workspace).
 2. For VS Code, analysis starts automatically. For other editors, enable RustOwl manually or configure auto-loading.
 3. Progress is shown in your editor. RustOwl works for analyzed portions, even if the whole workspace isn't finished.
 4. Place the cursor on a variable or function call to inspect ownership/lifetime info.
 
-## Usage
-
-RustOwl helps resolve ownership and lifetime errors. It visualizes:
-
-- Actual lifetime of variables
-- Shared (immutable) borrowing
-- Mutable borrowing
-- Value movement
-- Function calls
-- Ownership/lifetime errors
-
-Hover over underlined code for explanations (VS Code example below):
-
-![Hover message on VS Code](assets/vscode-screenshot.png)
-
-## Advanced Usage
-
-RustOwl visualizes:
-
-- Where a variable lives (_NLL_)
-- Until it's dropped or moved (_RAII_)
-
-Use RustOwl to:
-
-- Resolve deadlocks (e.g., with `Mutex`)
-- Manage resources (memory, files, etc. via RAII)
-
 ## Notes
 
 - VS Code: Underlines may not display perfectly for some characters (e.g., g, parentheses).
 - `println!` macro may produce extra output (does not affect usability).
-
----
-
-For more details, see the documentation in [docs/](docs/).

@@ -27,23 +27,13 @@ mod shells;
 mod toolchain;
 mod utils;
 
+use std::env;
+
 use lsp::backend::Backend;
 use tokio::io;
 use tower_lsp::{LspService, Server};
 
 async fn start_lsp_server() {
-    use std::env;
-
-    fn set_log_level(default: log::LevelFilter) {
-        log::set_max_level(
-            env::var("RUST_LOG")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(default),
-        );
-    }
-
-    set_log_level("warn".parse().unwrap());
     eprintln!("RustOwl v{}", env!("CARGO_PKG_VERSION"));
     eprintln!("This is an LSP server. You can use --help flag to show help.");
 

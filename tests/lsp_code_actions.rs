@@ -1,7 +1,7 @@
 //! Integration tests for LSP code actions.
 //!
-//! Tests the "Show ownership" code action functionality by spawning the ferrous-owl
-//! binary and communicating via the LSP protocol over stdio.
+//! Tests the "Show ownership" code action functionality by spawning the
+//! ferrous-owl binary and communicating via the LSP protocol over stdio.
 
 use std::{
     env::current_exe,
@@ -231,7 +231,12 @@ impl LspClient {
         }
     }
 
-    fn get_ferrous_owl_action_title(&mut self, uri: &str, line: u32, character: u32) -> Option<String> {
+    fn get_ferrous_owl_action_title(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Option<String> {
         let response = self.code_action(uri, line, character);
         response
             .get("result")

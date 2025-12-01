@@ -20,7 +20,9 @@ use serde::{Deserialize, Serialize};
 use crate::models::Function;
 
 fn get_cache_path() -> Option<PathBuf> {
-    env::var(crate::toolchain::CACHE_DIR_ENV).map(PathBuf::from).ok()
+    env::var(crate::toolchain::CACHE_DIR_ENV)
+        .map(PathBuf::from)
+        .ok()
 }
 
 pub static CACHE: LazyLock<Mutex<Option<CacheData>>> = LazyLock::new(|| Mutex::new(None));

@@ -1,219 +1,240 @@
 import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import * as vscode from "vscode";
 import packageJson from "../package.json";
 
 const version: string = packageJson.version;
 
-export const hostTuple = (): string | null => {
-  let arch = null;
-  if (process.arch === "arm64") {
-    arch = "aarch64";
-  } else if (process.arch === "x64") {
-    arch = "x86_64";
-  }
-  let platform = null;
-  if (process.platform === "linux") {
-    platform = "unknown-linux-gnu";
-  } else if (process.platform === "darwin") {
-    platform = "apple-darwin";
-  } else if (process.platform === "win32") {
-    platform = "pc-windows-msvc";
-  }
-  if (arch && platform) {
-    return `${arch}-${platform}`;
-  } else {
-    return null;
-  }
-};
-
-const exeExt = hostTuple()?.includes("windows") ? ".exe" : "";
+const REPO_URL = "https://github.com/wvhulle/rustowl.git";
+const CACHE_DIR = path.join(os.homedir(), ".cache", "rustowl");
+const CARGO_BIN = path.join(os.homedir(), ".cargo", "bin");
+const EXE_EXT = process.platform === "win32" ? ".exe" : "";
 
 interface RustowlConfig {
-  serverPath: string;
-  skipToolchainSetup: boolean;
+  readonly serverPath: string;
 }
 
-const getConfig = (): RustowlConfig => {
-  const config = vscode.workspace.getConfiguration("rustowl");
-  return {
-    serverPath: config.get<string>("serverPath", ""),
-    skipToolchainSetup: config.get<boolean>("skipToolchainSetup", false),
-  };
+const getConfig = (): RustowlConfig => ({
+  serverPath: vscode.workspace.getConfiguration("rustowl").get<string>("serverPath", ""),
+});
+
+const getVersionOutput = (command: string, args: string[]): string => {
+  const result = spawnSync(command, args);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions
+  return result.stdout ? String(result.stdout).trim() : "";
 };
 
-export const downloadRustowl = async (basePath: string) => {
-  const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}`;
-  const host = hostTuple();
-  if (host) {
-    const owl = await fetch(`${baseUrl}/rustowl-${host}${exeExt}`);
-    if (owl.status !== 200) {
-      throw Error("RustOwl download error");
-    }
-    await fs.writeFile(
-      `${basePath}/rustowl${exeExt}`,
-      Buffer.from(await owl.arrayBuffer()),
-      { flag: "w" },
+const commandExists = (command: string): boolean =>
+  spawnSync(command, ["--version"]).status === 0;
+
+const exists = async (filePath: string): Promise<boolean> =>
+  fs.access(filePath).then(() => true).catch(() => false);
+
+const isGitRepo = async (dir: string): Promise<boolean> =>
+  exists(path.join(dir, ".git"));
+
+const waitForProcess = (proc: ReturnType<typeof spawn>, name: string): Promise<void> =>
+  new Promise((resolve, reject) => {
+    proc.on("close", (code) =>
+      code === 0 ? resolve() : reject(new Error(`${name} failed with code ${code ?? "unknown"}`))
     );
-    await fs.chmod(`${basePath}/rustowl${exeExt}`, "755");
-  } else {
-    throw Error("unsupported architecture or platform");
-  }
-};
+    proc.on("error", reject);
+  });
 
-const exists = async (path: string) => {
-  return fs
-    .access(path)
-    .then(() => true)
-    .catch(() => false);
-};
-export const needUpdated = async (currentVersion: string) => {
-  if (!currentVersion) {
-    return true;
-  }
-  console.log(`current RustOwl version: ${currentVersion.trim()}`);
-  console.log(`extension version: v${version}`);
+export const needsUpdate = async (currentVersion: string): Promise<boolean> => {
+  if (!currentVersion) {return true;}
+  
+  console.warn(`Current RustOwl version: ${currentVersion}`);
+  console.warn(`Extension version: v${version}`);
+  
   try {
     const semverParser = await import("semver-parser");
-    const current = semverParser.parseSemVer(currentVersion.trim(), false);
-    const self = semverParser.parseSemVer(version, false);
-    if (
-      current.major === self.major &&
-      current.minor === self.minor &&
-      current.patch === self.patch &&
-      JSON.stringify(current.pre) === JSON.stringify(self.pre)
-    ) {
-      return false;
-    } else {
-      return true;
-    }
-  } catch (_e) {
+    const current = semverParser.parseSemVer(currentVersion, false);
+    const target = semverParser.parseSemVer(version, false);
+    return !(
+      current.major === target.major &&
+      current.minor === target.minor &&
+      current.patch === target.patch &&
+      JSON.stringify(current.pre) === JSON.stringify(target.pre)
+    );
+  } catch {
     return true;
   }
 };
-const getRustowlCommand = async (dirPath: string) => {
-  const rustowlPath = `${dirPath}/rustowl${exeExt}`;
-  if (spawnSync("rustowl", ["--version", "--quiet"]).stdout?.toString()) {
-    return "rustowl";
-  } else if (
-    (await exists(rustowlPath)) &&
-    spawnSync(rustowlPath, ["--version", "--quiet"]).stdout?.toString()
-  ) {
-    return rustowlPath;
+
+const tryBinstall = async (): Promise<boolean> =>
+  vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "RustOwl: Trying cargo-binstall..." },
+    async (progress) => {
+      if (!commandExists("cargo-binstall")) {
+        progress.report({ message: "cargo-binstall not found, skipping" });
+        return false;
+      }
+      
+      try {
+        progress.report({ message: "Installing via cargo-binstall..." });
+        const proc = spawn("cargo-binstall", ["--no-confirm", "rustowl"], { stdio: "pipe" });
+        await waitForProcess(proc, "cargo-binstall");
+        return true;
+      } catch {
+        progress.report({ message: "cargo-binstall failed" });
+        return false;
+      }
+    }
+  );
+
+const cloneOrPullRepo = async (
+  progress: vscode.Progress<{ message?: string }>
+): Promise<void> => {
+  await fs.mkdir(CACHE_DIR, { recursive: true });
+  
+  if (await isGitRepo(CACHE_DIR)) {
+    progress.report({ message: "Pulling latest changes..." });
+    const pull = spawn("git", ["pull", "--ff-only"], { cwd: CACHE_DIR });
+    try {
+      await waitForProcess(pull, "git pull");
+    } catch {
+      progress.report({ message: "Pull failed, re-cloning..." });
+      await fs.rm(CACHE_DIR, { recursive: true, force: true });
+      await fs.mkdir(CACHE_DIR, { recursive: true });
+      const clone = spawn("git", ["clone", "--depth", "1", REPO_URL, CACHE_DIR]);
+      await waitForProcess(clone, "git clone");
+    }
   } else {
-    return null;
+    progress.report({ message: "Cloning repository..." });
+    await fs.rm(CACHE_DIR, { recursive: true, force: true });
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+    const clone = spawn("git", ["clone", "--depth", "1", REPO_URL, CACHE_DIR]);
+    await waitForProcess(clone, "git clone");
   }
 };
 
-export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
+const buildFromSource = async (): Promise<boolean> =>
+  vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "RustOwl: Building from source",
+      cancellable: false,
+    },
+    async (progress) => {
+      try {
+        await cloneOrPullRepo(progress);
+        
+        progress.report({ message: "Running cargo install (this may take a few minutes)..." });
+        
+        const cargoInstall = spawn("cargo", ["install", "--path", ".", "--locked"], {
+          cwd: CACHE_DIR,
+        });
+
+        cargoInstall.stderr.on("data", (data: Buffer) => {
+          const line = String(data).trim();
+          if (line.includes("Compiling")) {
+            progress.report({ message: line });
+          }
+        });
+
+        await waitForProcess(cargoInstall, "cargo install");
+        
+        progress.report({ message: "Installation complete" });
+        return true;
+      } catch (e) {
+        console.error("Build from source failed:", e);
+        return false;
+      }
+    }
+  );
+
+const createSymlink = async (binaryPath: string): Promise<void> => {
+  const symlinkPath = path.join(CARGO_BIN, `rustowl${EXE_EXT}`);
+  
+  if (await exists(symlinkPath)) {
+    const stat = await fs.lstat(symlinkPath);
+    if (stat.isSymbolicLink() || stat.isFile()) {
+      await fs.unlink(symlinkPath);
+    }
+  }
+  
+  try {
+    await fs.symlink(binaryPath, symlinkPath);
+    console.warn(`Created symlink: ${symlinkPath} -> ${binaryPath}`);
+  } catch (e) {
+    console.warn(`Could not create symlink: ${String(e)}`);
+  }
+};
+
+const findRustowlBinary = async (): Promise<string | null> => {
+  const locations = [
+    path.join(CARGO_BIN, `rustowl${EXE_EXT}`),
+    path.join(CACHE_DIR, "target", "release", `rustowl${EXE_EXT}`),
+  ];
+  
+  for (const loc of locations) {
+    if (await exists(loc)) {
+      const ver = getVersionOutput(loc, ["--version", "--quiet"]);
+      if (ver) {return loc;}
+    }
+  }
+  
+  const globalVer = getVersionOutput("rustowl", ["--version", "--quiet"]);
+  if (globalVer) {return "rustowl";}
+  
+  return null;
+};
+
+const installRustowl = async (): Promise<string> => {
+  if (!commandExists("cargo") || !commandExists("git")) {
+    throw new Error(
+      "RustOwl requires cargo and git. Please install Rust via rustup.rs and ensure git is available."
+    );
+  }
+
+  if (await tryBinstall()) {
+    const binary = await findRustowlBinary();
+    if (binary) {return binary;}
+  }
+
+  if (await buildFromSource()) {
+    const targetBinary = path.join(CACHE_DIR, "target", "release", `rustowl${EXE_EXT}`);
+    if (await exists(targetBinary)) {
+      await createSymlink(targetBinary);
+    }
+    
+    const binary = await findRustowlBinary();
+    if (binary) {return binary;}
+  }
+
+  void vscode.window.showErrorMessage(
+    "RustOwl installation failed. Please install manually:\n" +
+    "git clone https://github.com/wvhulle/rustowl.git ~/.cache/rustowl\n" +
+    "cd ~/.cache/rustowl && cargo install --path . --locked"
+  );
+  
+  throw new Error("Failed to install RustOwl");
+};
+
+export const bootstrapRustowl = async (_dirPath: string): Promise<string> => {
   const config = getConfig();
 
-  // If serverPath is configured, use it directly without any setup
   if (config.serverPath) {
-    const serverPath = config.serverPath;
-    const result = spawnSync(serverPath, ["--version", "--quiet"]);
-    if (result.stdout?.toString()) {
-      console.log(`Using configured serverPath: ${serverPath}`);
-      return serverPath;
-    } else {
-      throw Error(
-        `Configured serverPath "${serverPath}" is not a valid rustowl executable`,
-      );
+    const ver = getVersionOutput(config.serverPath, ["--version", "--quiet"]);
+    if (ver) {
+      console.warn(`Using configured serverPath: ${config.serverPath}`);
+      return config.serverPath;
     }
+    throw new Error(`Configured serverPath "${config.serverPath}" is not a valid rustowl executable`);
   }
 
-  let rustowlCommand = await getRustowlCommand(dirPath);
-
-  // If skipToolchainSetup is enabled and we have a working rustowl, use it directly
-  if (config.skipToolchainSetup && rustowlCommand) {
-    console.log(
-      `Using rustowl without toolchain setup (skipToolchainSetup=true): ${rustowlCommand}`,
-    );
-    return rustowlCommand;
-  }
-
-  if (
-    !rustowlCommand ||
-    (await needUpdated(
-      spawnSync(rustowlCommand, ["--version", "--quiet"]).stdout?.toString(),
-    ))
-  ) {
-    await fs.mkdir(dirPath, { recursive: true });
-    // download rustowl binary
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: "RustOwl installing",
-        cancellable: false,
-      },
-      async (progress) => {
-        try {
-          progress.report({ message: "binary downloading" });
-          await downloadRustowl(dirPath);
-          progress.report({ message: "binary downloaded" });
-        } catch (e) {
-          vscode.window.showErrorMessage(`${e}`);
-        }
-      },
-    );
-
-    // Skip toolchain setup if configured
-    if (config.skipToolchainSetup) {
-      rustowlCommand = await getRustowlCommand(dirPath);
-      if (!rustowlCommand) {
-        throw Error("failed to install RustOwl");
-      }
-      console.log(
-        `Skipping toolchain setup (skipToolchainSetup=true): ${rustowlCommand}`,
-      );
-      return rustowlCommand;
+  const existingBinary = await findRustowlBinary();
+  
+  if (existingBinary) {
+    const currentVersion = getVersionOutput(existingBinary, ["--version", "--quiet"]);
+    if (!(await needsUpdate(currentVersion))) {
+      return existingBinary;
     }
-
-    rustowlCommand = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: "Setup RustOwl toolchain",
-        cancellable: false,
-      },
-      async (progress) => {
-        try {
-          rustowlCommand = await getRustowlCommand(dirPath);
-
-          if (!rustowlCommand) {
-            throw Error("failed to install RustOwl");
-          }
-
-          const installer = spawn(rustowlCommand, ["toolchain", "install"], {
-            stdio: ["ignore", "ignore", "pipe"],
-          });
-          installer.stderr.addListener("data", (data) => {
-            if (`${data}`.includes("%")) {
-              progress.report({
-                message: "toolchain downloading",
-                increment: 0.25, // downloads 4 toolchain components
-              });
-            }
-          });
-          return new Promise((resolve, reject) => {
-            installer.addListener("exit", (code) => {
-              if (code === 0) {
-                resolve(rustowlCommand);
-              } else {
-                reject(`toolchain setup failed (exit code ${code})`);
-              }
-            });
-          });
-        } catch (e) {
-          vscode.window.showErrorMessage(`${e}`);
-        }
-        return null;
-      },
-    );
+    console.warn("RustOwl update available, installing...");
   }
 
-  if (!rustowlCommand) {
-    throw Error("failed to install RustOwl");
-  }
-
-  return rustowlCommand;
+  return installRustowl();
 };

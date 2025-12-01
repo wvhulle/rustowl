@@ -16,12 +16,12 @@ Move the cursor over a variable or function call and wait ~2 seconds to visualiz
 
 ## Installation
 
-Prerequisites:
+Install system packages:
 
 - `rustup` ([install](https://rustup.rs/))
 - C compiler (`gcc`, `clang`, or Visual Studio on Windows)
 
-RustOwl requires a nightly Rust toolchain, which will be installed automatically by `rustup` based on [rust-toolchain.toml](rust-toolchain.toml).
+RustOwl requires a nightly Rust toolchain, which will be installed automatically by `rustup` based on [rust-toolchain.toml](rust-toolchain.toml) when you run `cargo install --path .` (don't run `cargo install --git` as it does not respect the toolchain file).
 
 ```bash
 git clone git@github.com:wvhulle/rustowl.git /tmp/rustowl
@@ -29,7 +29,12 @@ cd /tmp/rustowl
 cargo install --path . --locked
 ```
 
-Then, complete the editor setup: see [editors/](./editors/)
+Make sure the `~/.cargo/bin` directory is in your path. Then, complete the [editors/](./editors/) setup.
+Run the server in LSP mode (done automatically when editor is configured properly):
+
+```bash
+rustowl
+```
 
 ## Usage
 

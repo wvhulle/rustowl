@@ -24,9 +24,6 @@ name = "comprehensive"
 [dependencies]
 cargo_metadata = "0.23"
 clap = { version = "4", features = ["cargo", "derive"] }
-clap_complete = "4"
-clap_complete_nushell = "4"
-clap_mangen = "0.2"
 log = "0.4"
 process_alive = "0.2"
 rayon = "1"
@@ -52,10 +49,6 @@ uuid = { version = "1", features = ["v4"] }
 criterion = { version = "0.7", features = ["html_reports"] }
 
 [build-dependencies]
-clap = { version = "4", features = ["derive"] }
-clap_complete = "4"
-clap_complete_nushell = "4"
-clap_mangen = "0.2"
 regex = "1"
 
 

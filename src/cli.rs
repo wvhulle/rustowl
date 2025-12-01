@@ -1,10 +1,10 @@
-use std::{env, io, io::Write, path::PathBuf, process::exit};
+use std::{env, path::PathBuf, process::exit};
 
-use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueHint};
-use clap_complete::generate;
-use tokio::fs::remove_dir_all;
+use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
+use tokio::{fs::remove_dir_all, io};
+use tower_lsp::{LspService, Server};
 
-use crate::shells::Shell;
+use crate::lsp::backend::Backend;
 
 #[derive(Debug, Parser)]
 #[command(author)]
@@ -17,10 +17,6 @@ pub struct Cli {
     #[arg(short, long, action(ArgAction::Count))]
     pub quiet: u8,
 
-    /// Use stdio to communicate with the LSP server.
-    #[arg(long)]
-    pub stdio: bool,
-
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -32,16 +28,6 @@ pub enum Commands {
 
     /// Remove artifacts from the target directory.
     Clean,
-
-    /// Generate shell completions.
-    Completions {
-        /// The shell to generate completions for.
-        #[arg(value_enum)]
-        shell: Shell,
-    },
-
-    /// Generate a man page for the CLI.
-    Manpage,
 }
 
 #[derive(Args, Debug)]
@@ -97,15 +83,6 @@ impl Commands {
                     remove_dir_all(&target).await.ok();
                 }
             }
-            Self::Completions { shell } => {
-                generate(shell, &mut Cli::command(), "rustowl", &mut io::stdout());
-            }
-            Self::Manpage => {
-                let man = clap_mangen::Man::new(Cli::command());
-                let mut buffer: Vec<u8> = Vec::default();
-                man.render(&mut buffer).unwrap();
-                io::stdout().write_all(&buffer).unwrap();
-            }
         }
     }
 }
@@ -121,7 +98,22 @@ impl Cli {
             }
             println!("v{}", clap::crate_version!());
         } else {
-            crate::start_lsp_server().await;
+            start_lsp_server().await;
         }
     }
+}
+
+async fn start_lsp_server() {
+    eprintln!("RustOwl v{}", env!("CARGO_PKG_VERSION"));
+    eprintln!("This is an LSP server. You can use --help flag to show help.");
+
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+
+    let (service, socket) = LspService::build(Backend::new)
+        .custom_method("rustowl/cursor", Backend::cursor)
+        .custom_method("rustowl/analyze", Backend::analyze)
+        .finish();
+
+    Server::new(stdin, stdout, socket).serve(service).await;
 }

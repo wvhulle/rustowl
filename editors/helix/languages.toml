@@ -1,5 +1,4 @@
 [language-server.rustowl]
-args = ["--stdio"]
 command = "rustowl"
 
 [[language]]

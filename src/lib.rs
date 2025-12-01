@@ -23,27 +23,7 @@ pub mod cli;
 pub mod compiler;
 mod lsp;
 mod models;
-mod shells;
 mod toolchain;
 mod utils;
 
-use std::env;
-
-use lsp::backend::Backend;
-use tokio::io;
-use tower_lsp::{LspService, Server};
-
-async fn start_lsp_server() {
-    eprintln!("RustOwl v{}", env!("CARGO_PKG_VERSION"));
-    eprintln!("This is an LSP server. You can use --help flag to show help.");
-
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-
-    let (service, socket) = LspService::build(Backend::new)
-        .custom_method("rustowl/cursor", Backend::cursor)
-        .custom_method("rustowl/analyze", Backend::analyze)
-        .finish();
-
-    Server::new(stdin, stdout, socket).serve(service).await;
-}
+pub use lsp::backend::Backend;

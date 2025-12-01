@@ -1,7 +1,7 @@
 //! Integration tests for LSP code actions.
 //!
 //! Tests the "Show ownership" code action functionality by spawning the rustowl
-//! binary with `--stdio` and communicating via the LSP protocol.
+//! binary and communicating via the LSP protocol over stdio.
 
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -28,10 +28,9 @@ impl LspClient {
     fn spawn() -> Self {
         let binary = env!("CARGO_BIN_EXE_rustowl");
         let mut child = Command::new(binary)
-            .arg("--stdio")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::null())
             .spawn()
             .expect("Failed to spawn rustowl LSP server");
 

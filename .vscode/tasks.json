@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-vscode-extension",
+            "type": "shell",
+            "command": "pnpm run compile",
+            "options": {
+                "cwd": "${workspaceFolder}/editors/vscode"
+            },
+            "problemMatcher": [
+                "$tsc",
+                "$esbuild"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

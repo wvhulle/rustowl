@@ -1,8 +1,5 @@
-#![allow(unused, reason = "MIR structure models")]
-
 use std::{
     collections::HashMap,
-    mem::size_of,
     ops::{Add, Sub},
 };
 
@@ -160,7 +157,7 @@ impl MirVariables {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
-
+    #[cfg(test)]
     pub fn push(&mut self, var: MirVariable) {
         match &var {
             MirVariable::User { index, .. } | MirVariable::Other { index, .. } => {
@@ -170,11 +167,11 @@ impl MirVariables {
             }
         }
     }
+}
 
-    #[must_use]
-    #[allow(clippy::wrong_self_convention, reason = "converts collection to Vec")]
-    pub fn to_vec(self) -> Vec<MirVariable> {
-        self.0.into_values().collect()
+impl From<MirVariables> for Vec<MirVariable> {
+    fn from(value: MirVariables) -> Self {
+        value.0.into_values().collect()
     }
 }
 
@@ -459,7 +456,7 @@ mod tests {
         mir_vars.push(user_var);
         mir_vars.push(other_var);
 
-        let vars_vec = mir_vars.clone().to_vec();
+        let vars_vec: Vec<MirVariable> = mir_vars.clone().into();
         assert_eq!(vars_vec.len(), 2);
 
         let has_user_var = vars_vec
@@ -473,7 +470,7 @@ mod tests {
         assert!(has_other_var);
 
         mir_vars.push(user_var);
-        let final_vec = mir_vars.to_vec();
+        let final_vec: Vec<MirVariable> = mir_vars.into();
         assert_eq!(final_vec.len(), 2);
     }
 

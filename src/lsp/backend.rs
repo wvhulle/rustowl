@@ -49,6 +49,7 @@ pub struct Backend {
 }
 
 impl Backend {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         Self {
             client,

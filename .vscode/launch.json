@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run RustOwl Extension",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+                "--disable-extensions",
+                "--enable-extension=rust-lang.rust-analyzer",
+                "${workspaceFolder}"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/editors/vscode/dist/**/*.js"
+            ],
+            "preLaunchTask": "build-vscode-extension"
+        }
+    ]
+}

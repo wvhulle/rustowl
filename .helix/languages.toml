@@ -1,5 +1,5 @@
 [language-server.rustowl]
-args = ["run", "--", "--stdio"]
+args = ["run"]
 command = "cargo"
 
 [[language]]

@@ -6,6 +6,16 @@ authors = [
 categories = ["development-tools", "visualization"]
 description = "Visualize Ownership and Lifetimes in Rust"
 edition = "2024"
+exclude = [
+  ".vscode",
+  ".helix",
+  "benches/",
+  "editors/",
+  "tests/",
+  ".github/",
+  ".vscode/",
+  "default.nix",
+]
 keywords = ["lifetime", "lsp", "ownership", "visualization"]
 license = "MPL-2.0"
 name = "ferrous-owl"

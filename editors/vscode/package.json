@@ -4,7 +4,7 @@
   "description": "Visualize ownership and lifetimes in Rust",
   "version": "0.0.1",
   "author": "Willem Vanhulle <willemvanhulle@protonmail.com>",
-  "publisher": "wvhulle",
+  "publisher": "WillemVanhulle",
   "engines": {
     "vscode": "^1.104.0"
   },

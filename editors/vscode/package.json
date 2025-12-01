@@ -47,6 +47,14 @@
       {
         "command": "rustowl.analyze",
         "title": "RustOwl: Re-analyze workspace"
+      },
+      {
+        "command": "rustowl.update",
+        "title": "RustOwl: Update server"
+      },
+      {
+        "command": "rustowl.restart",
+        "title": "RustOwl: Restart server"
       }
     ],
     "configuration": {

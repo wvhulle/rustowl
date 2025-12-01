@@ -64,7 +64,8 @@ export const needsUpdate = async (currentVersion: string): Promise<boolean> => {
   }
 };
 
-const tryBinstall = async (): Promise<boolean> =>
+// TODO: Re-enable when package is published to crates.io
+const _tryBinstall = async (): Promise<boolean> =>
   vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "RustOwl: Trying cargo-binstall..." },
     async (progress) => {
@@ -122,22 +123,22 @@ const buildFromSource = async (): Promise<boolean> =>
       try {
         await cloneOrPullRepo(progress);
         
-        progress.report({ message: "Running cargo install (this may take a few minutes)..." });
+        progress.report({ message: "Running cargo build --release (this may take a few minutes)..." });
         
-        const cargoInstall = spawn("cargo", ["install", "--path", ".", "--locked"], {
+        const cargoBuild = spawn("cargo", ["build", "--release", "--locked"], {
           cwd: CACHE_DIR,
         });
 
-        cargoInstall.stderr.on("data", (data: Buffer) => {
+        cargoBuild.stderr.on("data", (data: Buffer) => {
           const line = String(data).trim();
           if (line.includes("Compiling")) {
             progress.report({ message: line });
           }
         });
 
-        await waitForProcess(cargoInstall, "cargo install");
+        await waitForProcess(cargoBuild, "cargo build");
         
-        progress.report({ message: "Installation complete" });
+        progress.report({ message: "Build complete" });
         return true;
       } catch (e) {
         console.error("Build from source failed:", e);
@@ -183,32 +184,35 @@ const findRustowlBinary = async (): Promise<string | null> => {
   return null;
 };
 
-const installRustowl = async (): Promise<string> => {
+export const installRustowl = async (): Promise<string> => {
   if (!commandExists("cargo") || !commandExists("git")) {
     throw new Error(
       "RustOwl requires cargo and git. Please install Rust via rustup.rs and ensure git is available."
     );
   }
 
-  if (await tryBinstall()) {
-    const binary = await findRustowlBinary();
-    if (binary) {return binary;}
-  }
+  // TODO: Re-enable binstall when package is published
+  // if (await tryBinstall()) {
+  //   const binary = await findRustowlBinary();
+  //   if (binary) {
+  //     return binary;
+  //   }
+  // }
 
   if (await buildFromSource()) {
     const targetBinary = path.join(CACHE_DIR, "target", "release", `rustowl${EXE_EXT}`);
     if (await exists(targetBinary)) {
-      await createSymlink(targetBinary);
+      // Create symlink in background, don't wait - avoids disrupting any running server
+      void createSymlink(targetBinary);
+      // Return the direct path to the built binary
+      return targetBinary;
     }
-    
-    const binary = await findRustowlBinary();
-    if (binary) {return binary;}
   }
 
   void vscode.window.showErrorMessage(
     "RustOwl installation failed. Please install manually:\n" +
     "git clone https://github.com/wvhulle/rustowl.git ~/.cache/rustowl\n" +
-    "cd ~/.cache/rustowl && cargo install --path . --locked"
+    "cd ~/.cache/rustowl && cargo build --release --locked"
   );
   
   throw new Error("Failed to install RustOwl");
@@ -230,11 +234,24 @@ export const bootstrapRustowl = async (_dirPath: string): Promise<string> => {
   
   if (existingBinary) {
     const currentVersion = getVersionOutput(existingBinary, ["--version", "--quiet"]);
-    if (!(await needsUpdate(currentVersion))) {
-      return existingBinary;
+    const updateNeeded = await needsUpdate(currentVersion);
+    
+    if (updateNeeded) {
+      // Don't auto-update - just warn the user and use existing binary
+      // Auto-updating can kill running servers in other VS Code windows
+      void vscode.window.showWarningMessage(
+        `RustOwl update available (${currentVersion} → v${version}). Run "RustOwl: Update" command to update.`,
+        "Update Now"
+      ).then(async (choice) => {
+        if (choice === "Update Now") {
+          await vscode.commands.executeCommand("rustowl.update");
+        }
+      });
     }
-    console.warn("RustOwl update available, installing...");
+    
+    return existingBinary;
   }
 
+  // No existing binary found - install
   return installRustowl();
 };

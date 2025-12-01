@@ -1,12 +1,16 @@
 import * as vscode from "vscode";
 import type { Range } from "vscode-languageserver-types";
 
-import { bootstrapRustowl } from "./bootstrap";
+import { bootstrapRustowl, installRustowl } from "./bootstrap";
 import {
   LanguageClient,
   type Executable,
   TransportKind,
   type LanguageClientOptions,
+  State,
+  ErrorAction,
+  CloseAction,
+  type ErrorHandler,
 } from "vscode-languageclient/node";
 
 type DisplayMode = "selected" | "hover" | "manual" | "disabled";
@@ -215,6 +219,7 @@ class StatusBarManager {
 const initializeClient = async (
   context: vscode.ExtensionContext,
   clientOptions: LanguageClientOptions,
+  statusBarManager: StatusBarManager,
 ): Promise<void> => {
   const command = await bootstrapRustowl(context.globalStorageUri.fsPath);
   const serverOptions: Executable = {
@@ -222,7 +227,63 @@ const initializeClient = async (
     transport: TransportKind.stdio,
   };
 
-  client = new LanguageClient("rustowl", "RustOwl", serverOptions, clientOptions);
+  // Custom error handler to detect server crashes and malformed responses
+  const errorHandler: ErrorHandler = {
+    error: (error, message, count) => {
+      console.error(`RustOwl LSP error (${count ?? 0}):`, error, message);
+      statusBarManager.updateFromLspStatus("error");
+      
+      // Don't restart on repeated errors - likely a fundamental issue
+      if ((count ?? 0) >= 3) {
+        void vscode.window.showErrorMessage(
+          "RustOwl server keeps failing. The server binary may be incompatible. " +
+          "Try running 'RustOwl: Update' command to rebuild."
+        );
+        return { action: ErrorAction.Shutdown };
+      }
+      return { action: ErrorAction.Continue };
+    },
+    closed: () => {
+      console.warn("RustOwl LSP connection closed unexpectedly");
+      statusBarManager.updateFromLspStatus("error");
+      
+      // Don't auto-restart - let user decide
+      void vscode.window.showWarningMessage(
+        "RustOwl server stopped unexpectedly. Restart?",
+        "Restart",
+        "Ignore"
+      ).then((choice) => {
+        if (choice === "Restart") {
+          void vscode.commands.executeCommand("rustowl.restart");
+        }
+      });
+      
+      return { action: CloseAction.DoNotRestart };
+    },
+  };
+
+  const fullClientOptions: LanguageClientOptions = {
+    ...clientOptions,
+    errorHandler,
+  };
+
+  client = new LanguageClient("rustowl", "RustOwl", serverOptions, fullClientOptions);
+  
+  client.onDidChangeState((e) => {
+    const stateNames = new Map<number, string>([
+      [1, "stopped"],
+      [2, "running"],
+      [3, "starting"],
+    ]);
+    const oldName = stateNames.get(e.oldState) ?? String(e.oldState);
+    const newName = stateNames.get(e.newState) ?? String(e.newState);
+    console.warn(`RustOwl client state: ${oldName} -> ${newName}`);
+    
+    if (e.newState === State.Running) {
+      statusBarManager.updateFromDisplayMode(getDisplayMode());
+    }
+  });
+  
   await client.start();
 };
 
@@ -245,11 +306,43 @@ const sendCursorRequest = async (
   return isLspCursorResponse(resp) ? resp : null;
 };
 
+const createClientWithOptions = (
+  command: string,
+  clientOptions: LanguageClientOptions,
+): LanguageClient =>
+  new LanguageClient("rustowl", "RustOwl", {
+    command,
+    transport: TransportKind.stdio,
+  } satisfies Executable, clientOptions);
+
+const restartClient = async (clientOptions: LanguageClientOptions): Promise<void> => {
+  if (client?.isRunning()) {
+    await client.stop();
+  }
+  client = undefined;
+
+  const binary = await bootstrapRustowl("");
+  client = createClientWithOptions(binary, clientOptions);
+  await client.start();
+};
+
+const updateAndRestartClient = async (clientOptions: LanguageClientOptions): Promise<void> => {
+  if (client?.isRunning()) {
+    await client.stop();
+  }
+  client = undefined;
+
+  const newBinary = await installRustowl();
+  client = createClientWithOptions(newBinary, clientOptions);
+  await client.start();
+};
+
 const registerCommands = (
   context: vscode.ExtensionContext,
   activeEditorRef: { current: vscode.TextEditor | undefined },
   decorationManager: DecorationManager,
   statusBarManager: StatusBarManager,
+  clientOptions: LanguageClientOptions,
 ): void => {
   const handleCursorRequest = async (
     editor: vscode.TextEditor,
@@ -319,6 +412,34 @@ const registerCommands = (
   registerCommand("rustowl.analyze", async () => {
     await client?.sendRequest("rustowl/analyze", {});
     void vscode.window.showInformationMessage("RustOwl: Re-analyzing workspace...");
+  });
+
+  registerCommand("rustowl.restart", async () => {
+    try {
+      await restartClient(clientOptions);
+      void vscode.window.showInformationMessage("RustOwl restarted successfully!");
+    } catch (e) {
+      void vscode.window.showErrorMessage(`Failed to restart RustOwl: ${String(e)}`);
+    }
+  });
+
+  registerCommand("rustowl.update", async () => {
+    const choice = await vscode.window.showWarningMessage(
+      "This will stop the current RustOwl server and rebuild. Continue?",
+      "Yes",
+      "No"
+    );
+    
+    if (choice !== "Yes") {
+      return;
+    }
+
+    try {
+      await updateAndRestartClient(clientOptions);
+      void vscode.window.showInformationMessage("RustOwl updated and restarted successfully!");
+    } catch (e) {
+      void vscode.window.showErrorMessage(`Failed to update RustOwl: ${String(e)}`);
+    }
   });
 };
 
@@ -405,17 +526,17 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push({ dispose: () => decorationManager.dispose() });
   context.subscriptions.push({ dispose: () => statusBarManager.dispose() });
 
-  void initializeClient(context, clientOptions).catch((e: unknown) => {
+  void initializeClient(context, clientOptions, statusBarManager).catch((e: unknown) => {
     void vscode.window.showErrorMessage(`Failed to start RustOwl\n${String(e)}`);
   });
 
-  registerCommands(context, activeEditorRef, decorationManager, statusBarManager);
+  registerCommands(context, activeEditorRef, decorationManager, statusBarManager, clientOptions);
   registerEventHandlers(context, activeEditorRef, decorationManager, statusBarManager);
 }
 
 export async function deactivate(): Promise<void> {
-  if (client) {
+  if (client?.isRunning()) {
     await client.stop();
-    client = undefined;
   }
+  client = undefined;
 }

@@ -1,3 +1,4 @@
+
 [package]
 authors = ["wvhulle <willemvanhulle@protonmail.com>"]
 categories = ["development-tools", "visualization"]
@@ -18,7 +19,7 @@ license = "MPL-2.0"
 name = "ferrous-owl"
 readme = "README.md"
 repository = "https://github.com/wvhulle/ferrous-owl"
-version = "0.0.2"
+version = "0.0.3"
 
 [package.metadata.rust-analyzer]
 rustc_private = true
@@ -37,6 +38,7 @@ process_alive = "0.2"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 tokio = { version = "1", features = [
   "fs",
   "io-std",
@@ -54,9 +56,6 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }
-
-[build-dependencies]
-regex = "1"
 
 
 [profile.release]
@@ -88,7 +87,7 @@ complexity = { level = "warn", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 style = { level = "deny", priority = -1 }
 
-absolute_paths = "deny"
+absolute_paths = "warn"
 allow_attributes_without_reason = "deny"
 branches_sharing_code = "deny"
 collapsible_else_if = "deny"
@@ -105,9 +104,11 @@ manual_filter_map = "deny"
 manual_find = "deny"
 manual_map = "deny"
 manual_ok_or = "deny"
+missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 needless_raw_string_hashes = "allow"
 struct_excessive_bools = "allow"
+struct_field_names = "warn"
 # manual_saturating_arithmetic = "deny"
 manual_unwrap_or = "deny"
 manual_while_let_some = "deny"
@@ -139,6 +140,7 @@ significant_drop_tightening = "deny"
 single_match_else = "deny"
 single_option_map = "deny"
 too_long_first_doc_paragraph = "deny"
+too_many_lines = "warn"
 trait_duplication_in_bounds = "deny"
 trivial_regex = "deny"
 type_repetition_in_bounds = "deny"

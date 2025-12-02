@@ -9,11 +9,11 @@ use tokio::{sync::RwLock, task::JoinSet, time};
 use tokio_util::sync::CancellationToken;
 use tower_lsp::{Client, LanguageServer, LspService, jsonrpc, lsp_types};
 
-use super::analyze::{Analyzer, AnalyzerEvent};
 use crate::{
-    lsp::{decoration, progress},
+    lsp_decoration as decoration, lsp_progress as progress,
+    lsp_workspace::{Analyzer, AnalyzerEvent},
     models::{Crate, Loc},
-    utils,
+    range_ops, text_conversion,
 };
 
 /// Commands supported by workspace/executeCommand
@@ -78,10 +78,6 @@ impl Backend {
         }
     }
 
-    #[allow(
-        clippy::missing_errors_doc,
-        reason = "LSP handler signature requirement"
-    )]
     pub async fn analyze(&self, _params: AnalyzeRequest) -> jsonrpc::Result<AnalyzeResponse> {
         log::info!("ferrous-owl/analyze request received");
         self.do_analyze().await;
@@ -223,7 +219,7 @@ impl Backend {
                         error = progress::AnalysisStatus::Finished;
                     }
                     for item in &file.items {
-                        utils::mir_visit(item, &mut selected);
+                        range_ops::mir_visit(item, &mut selected);
                     }
                 }
             }
@@ -240,7 +236,7 @@ impl Backend {
             for (filename, file) in &analyzed.0 {
                 if filepath == PathBuf::from(filename) {
                     for item in &file.items {
-                        utils::mir_visit(item, &mut calc);
+                        range_ops::mir_visit(item, &mut calc);
                     }
                 }
             }
@@ -258,10 +254,6 @@ impl Backend {
         }
     }
 
-    #[allow(
-        clippy::missing_errors_doc,
-        reason = "LSP handler signature requirement"
-    )]
     pub async fn cursor(
         &self,
         params: decoration::CursorRequest,
@@ -272,7 +264,7 @@ impl Backend {
             && let Ok(text) = fs::read_to_string(&path)
         {
             let position = params.position();
-            let pos = Loc(utils::line_char_to_index(
+            let pos = Loc::from(text_conversion::line_char_to_index(
                 &text,
                 position.line,
                 position.character,
@@ -288,19 +280,19 @@ impl Backend {
                     },
                 ),
             };
-            let decorations = decos.into_iter().map(|v| v.to_lsp_range(&text)).collect();
+            let items = decos.into_iter().map(|v| v.to_lsp_range(&text)).collect();
             return Ok(decoration::Decorations {
                 is_analyzed,
                 status,
                 path: Some(path),
-                decorations,
+                items,
             });
         }
         Ok(decoration::Decorations {
             is_analyzed,
             status,
             path: None,
-            decorations: Vec::new(),
+            items: Vec::new(),
         })
     }
 
@@ -311,7 +303,7 @@ impl Backend {
             path.display()
         );
         if let Ok(text) = fs::read_to_string(path) {
-            let pos = Loc(utils::line_char_to_index(
+            let pos = Loc::from(text_conversion::line_char_to_index(
                 &text,
                 position.line,
                 position.character,
@@ -350,10 +342,6 @@ impl Backend {
     }
 
     /// Handle workspace/executeCommand for ownership visualization commands
-    #[allow(
-        clippy::missing_errors_doc,
-        reason = "LSP handler signature requirement"
-    )]
     pub async fn handle_execute_command(
         &self,
         params: lsp_types::ExecuteCommandParams,
@@ -444,16 +432,9 @@ impl Backend {
         let uri = lsp_types::Url::parse(uri_str).ok()?;
         let path = uri.to_file_path().ok()?;
 
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "LSP positions are typically small"
-        )]
         let line = u32::try_from(args.get(1).and_then(serde_json::Value::as_u64).unwrap_or(0))
             .unwrap_or(0);
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "LSP positions are typically small"
-        )]
+
         let character = u32::try_from(args.get(2).and_then(serde_json::Value::as_u64).unwrap_or(0))
             .unwrap_or(0);
 

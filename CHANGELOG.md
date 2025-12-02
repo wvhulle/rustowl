@@ -1,18 +1,57 @@
 # Changelog
 
-## Forked as FerrousOwl - 2025-11-30
+## FerrousOwl v0.0.3 (2025-12-02)
 
-This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
+Added:
 
-## Unreleased
+- Test-runner that can check presence of diagnostics using a mock LSP client.
 
-### Changed
+Fixed:
+
+- Clippy warnings
+
+Changed:
+
+- Flatten library directory structure.
+- Refactor long functions
+
+## FerrousOwl v0.0.1 (2025-11-30)
+
+Forked by @wvhulle from [RustOwl](https://github.com/cordx56/rustowl). Thanks a lot to the original author Yuki Okamoto!_
+
+Fixed:
+
+- Underlines in VS Code appearing everywhere
+- Unclear installation instructions
+
+Changed:
+
+- Renamed from `RustOwl` to `FerrousOwl`
+- Merge separate binaries
+- Removed downloading compiler toolchain at runtime
+
+Added:
+
+- Code actions to show ownership diagnostics with a command manually
+- Add command to toggle between disabled, selected and manual
+- Support for NixOS
+- Support for Helix editor
+
+Removed:
+
+- Custom extension for Emacs
+- Custom extension for NeoVIM
+- Docker
+
+## RustOwl Unreleased (~2025-05)
+
+Changed:
 
 - Move to mimalloc allocator
 - Move to aws_lc instead of ring
 - Refactor runtime stack size and core usage
 
-### Added
+Added:
 
 - Add performance test to repo
 - Add Docker image
@@ -22,7 +61,7 @@ This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 - Cache mechanism
 - Winget package
 
-### Fixed
+Fixed:
 
 - Skip installing RustOwl toolchain option
 - Wrong visualization range from byte check
@@ -31,44 +70,44 @@ This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 
 ## v0.3.4 - 2025-05-20
 
-### Fixed
+Fixed:
 
 - Actual lifetime range visualization for Drop variable
 
 ## v0.3.3 - 2025-05-17
 
-### Added
+Added:
 
 - Update rustc to 1.87.0
 
-### Fixed
+Fixed:
 
 - CRLF support
 - Native CA certs via reqwest
 
 ## v0.3.2 - 2025-05-09
 
-### Added
+Added:
 
 - RUSTOWL_SYSROOT_DIRS support
 - Single .rs file analysis
 - VS Code download progress
 
-### Fixed
+Fixed:
 
 - macOS gsed support
 - cargo-binstall pkg-fmt
 
 ## v0.3.1 - 2025-05-07
 
-### Added
+Added:
 
 - RustOwl version check for VS Code
 - AUR packages
 - Dependabot automation
 - Windows zip support
 
-### Fixed
+Fixed:
 
 - VS Code version check null return
 - Windows arm build
@@ -76,13 +115,13 @@ This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 
 ## v0.3.0 - 2025-04-30
 
-### Added
+Added:
 
 - Shell completions and man pages
 
 ## v0.2.2 - 2025-04-18
 
-### Added
+Added:
 
 - RUSTOWL_TOOLCHAIN_DIR to bypass rustup
 
@@ -90,30 +129,30 @@ This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 
 ## v0.2.0 - 2025-04-09
 
-### Changed
+Changed:
 
 - Migrate to Rust 2024
 - Add prefix to functions with common names
 
 ## v0.1.4 - 2025-02-22
 
-### Changed
+Changed:
 
 - Simplify HashMap insertion using entry API
 
 ## v0.1.3 - 2025-02-20
 
-### Fixed
+Fixed:
 
 - Install newest version
 
 ## v0.1.2 - 2025-02-19
 
-### Added
+Added:
 
 - Issue templates
 
-### Fixed
+Fixed:
 
 - Client/server process cleanup
 
@@ -121,7 +160,7 @@ This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 
 ## v0.1.0 - 2025-02-05
 
-### Added
+Added:
 
 - Windows support
 
@@ -131,7 +170,7 @@ This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 
 ## v0.0.3 - 2025-01-30
 
-### Changed
+Changed:
 
 - Enable LTO codegen
 

@@ -1,5 +1,7 @@
+use core::fmt::Display;
 use std::{
     collections::HashMap,
+    fmt,
     ops::{Add, Sub},
 };
 
@@ -20,28 +22,22 @@ impl FnLocal {
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
-pub struct Loc(pub u32);
+pub struct Loc(u32);
+
 impl Loc {
     #[must_use]
-    pub fn new(source: &str, byte_pos: u32, offset: u32) -> Self {
+    pub fn from_byte_pos(source: &str, byte_pos: u32, offset: u32) -> Self {
         let byte_pos = byte_pos.saturating_sub(offset);
         // it seems that the compiler is ignoring CR
         let source_clean = source.replace('\r', "");
 
         // Convert byte position to character position safely
         if source_clean.len() < byte_pos as usize {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "count is bounded by string length"
-            )]
-            return Self(source_clean.chars().count() as u32);
+            return Self::from(source_clean.chars().count());
         }
 
         // Find the character index corresponding to the byte position
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "char index is bounded by position"
-        )]
+
         source_clean
             .char_indices()
             .position(|(byte_idx, _)| (byte_pos as usize) <= byte_idx)
@@ -53,42 +49,46 @@ impl Loc {
                     )]
                     Self(source_clean.chars().count() as u32)
                 },
-                |char_idx| Self(char_idx as u32),
+                Self::from,
             )
+    }
+}
+
+impl Display for Loc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
 impl Add<i32> for Loc {
     type Output = Self;
     fn add(self, rhs: i32) -> Self::Output {
-        #[allow(clippy::cast_possible_wrap, reason = "checked against rhs")]
-        #[allow(clippy::cast_sign_loss, reason = "safe when rhs >= 0")]
-        if rhs < 0 && (self.0 as i32) < -rhs {
-            Self(0)
-        } else {
-            #[allow(clippy::cast_sign_loss, reason = "already positive")]
-            Self(self.0 + rhs as u32)
-        }
+        Self(self.0.saturating_add_signed(rhs))
     }
 }
 
 impl Sub<i32> for Loc {
     type Output = Self;
     fn sub(self, rhs: i32) -> Self::Output {
-        #[allow(clippy::cast_possible_wrap, reason = "checked against rhs")]
-        #[allow(clippy::cast_sign_loss, reason = "safe when rhs >= 0")]
-        if 0 < rhs && (self.0 as i32) < rhs {
-            Self(0)
-        } else {
-            #[allow(clippy::cast_sign_loss, reason = "already positive")]
-            Self(self.0 - rhs as u32)
-        }
+        Self(self.0.saturating_add_signed(-rhs))
     }
 }
 
 impl From<u32> for Loc {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+impl From<u64> for Loc {
+    fn from(value: u64) -> Self {
+        Self(u32::try_from(value).unwrap_or(u32::MAX))
+    }
+}
+
+impl From<usize> for Loc {
+    fn from(value: usize) -> Self {
+        Self(u32::try_from(value).unwrap_or(u32::MAX))
     }
 }
 
@@ -127,60 +127,6 @@ impl Range {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum MirVariable {
-    User {
-        index: u32,
-        live: Range,
-        dead: Range,
-    },
-    Other {
-        index: u32,
-        live: Range,
-        dead: Range,
-    },
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(transparent)]
-pub struct MirVariables(HashMap<u32, MirVariable>);
-
-impl Default for MirVariables {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MirVariables {
-    #[must_use]
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-    #[cfg(test)]
-    pub fn push(&mut self, var: MirVariable) {
-        match &var {
-            MirVariable::User { index, .. } | MirVariable::Other { index, .. } => {
-                if !self.0.contains_key(index) {
-                    self.0.insert(*index, var);
-                }
-            }
-        }
-    }
-}
-
-impl From<MirVariables> for Vec<MirVariable> {
-    fn from(value: MirVariables) -> Self {
-        value.0.into_values().collect()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum Item {
-    Function { span: Range, mir: Function },
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct File {
     pub items: Vec<Function>,
@@ -191,6 +137,7 @@ pub struct File {
 pub struct Workspace(pub HashMap<String, Crate>);
 
 impl Workspace {
+    #[cfg(test)]
     pub fn merge(&mut self, other: Self) {
         let Self(crates) = other;
         for (name, krate) in crates {
@@ -339,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_loc_arithmetic_memory_safety() {
-        let loc = Loc::new("test string with unicode 🦀", 5, 0);
+        let loc = Loc::from_byte_pos("test string with unicode 🦀", 5, 0);
         let loc2 = loc + 2;
         let loc3 = loc2 - 1;
 
@@ -435,43 +382,6 @@ mod tests {
         workspace.merge(other_workspace);
         assert_eq!(workspace.0.len(), 3);
         assert!(workspace.0.contains_key("crate3"));
-    }
-
-    #[test]
-    fn test_mir_variables_operations() {
-        let mut mir_vars = MirVariables::new();
-
-        let user_var = MirVariable::User {
-            index: 1,
-            live: Range::new(Loc(0), Loc(10)).unwrap(),
-            dead: Range::new(Loc(10), Loc(20)).unwrap(),
-        };
-
-        let other_var = MirVariable::Other {
-            index: 2,
-            live: Range::new(Loc(5), Loc(15)).unwrap(),
-            dead: Range::new(Loc(15), Loc(25)).unwrap(),
-        };
-
-        mir_vars.push(user_var);
-        mir_vars.push(other_var);
-
-        let vars_vec: Vec<MirVariable> = mir_vars.clone().into();
-        assert_eq!(vars_vec.len(), 2);
-
-        let has_user_var = vars_vec
-            .iter()
-            .any(|v| matches!(v, MirVariable::User { index: 1, .. }));
-        let has_other_var = vars_vec
-            .iter()
-            .any(|v| matches!(v, MirVariable::Other { index: 2, .. }));
-
-        assert!(has_user_var);
-        assert!(has_other_var);
-
-        mir_vars.push(user_var);
-        let final_vec: Vec<MirVariable> = mir_vars.into();
-        assert_eq!(final_vec.len(), 2);
     }
 
     #[test]

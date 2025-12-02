@@ -4,7 +4,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
 use tokio::{fs::remove_dir_all, io};
 use tower_lsp::{LspService, Server};
 
-use crate::lsp::backend::Backend;
+use crate::lsp_server::Backend;
 
 #[derive(Debug, Parser)]
 #[command(author)]
@@ -64,12 +64,8 @@ impl Commands {
             Self::Check(options) => {
                 let path = options.path.unwrap_or_else(|| env::current_dir().unwrap());
 
-                if crate::Backend::check_with_options(
-                    &path,
-                    options.all_targets,
-                    options.all_features,
-                )
-                .await
+                if Backend::check_with_options(&path, options.all_targets, options.all_features)
+                    .await
                 {
                     log::info!("Successfully analyzed");
                     exit(0);

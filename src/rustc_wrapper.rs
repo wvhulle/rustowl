@@ -1,6 +1,3 @@
-mod analyze;
-mod cache;
-
 use std::{
     collections::HashMap,
     env, error, fmt,
@@ -10,22 +7,22 @@ use std::{
     thread,
 };
 
-use analyze::{AnalyzeResult, MirAnalyzer, MirAnalyzerInitResult};
 use rustc_hir::def_id::{LOCAL_CRATE, LocalDefId};
 use rustc_interface::interface;
 use rustc_middle::{mir::ConcreteOpaqueTypes, query::queries, ty::TyCtxt, util::Providers};
 use rustc_session::config;
+use tempfile::NamedTempFile;
 use tokio::{
     runtime::{Builder, Runtime},
     sync::mpsc,
     task::JoinSet,
 };
 
-use crate::models::{Crate, File, Workspace};
-
-// ============================================================================
-// Public API
-// ============================================================================
+use crate::{
+    mir_analysis::{AnalyzeResult, MirAnalyzer, MirAnalyzerInitResult},
+    mir_cache,
+    models::{Crate, File, Workspace},
+};
 
 #[derive(Debug)]
 pub enum AnalysisError {
@@ -58,22 +55,23 @@ pub fn run_as_rustc_wrapper() -> i32 {
 pub fn spawn_analysis(file: &Path, sysroot: &Path) -> AnalysisHandle {
     let (sender, receiver) = mpsc::unbounded_channel();
 
+    let output_file = NamedTempFile::new().expect("Failed to create temp file for compiler output");
+    let output_path = output_file.path().to_string_lossy().to_string();
+
     let mut args = vec![
         env!("CARGO_PKG_NAME").to_string(),
         env!("CARGO_PKG_NAME").to_string(),
         format!("--sysroot={}", sysroot.display()),
         "--crate-type=lib".to_string(),
+        format!("-o{output_path}"),
     ];
-    #[cfg(unix)]
-    args.push("-o/dev/null".to_string());
-    #[cfg(windows)]
-    args.push("-oNUL".to_string());
     args.push(file.to_string_lossy().to_string());
 
     let thread = thread::Builder::new()
         .name("ferrous-owl-compiler".to_string())
         .stack_size(128 * 1024 * 1024)
         .spawn(move || {
+            let _output_guard = output_file;
             *RESULT_SENDER.lock().unwrap() = Some(sender);
             let result = catch_unwind(AssertUnwindSafe(|| run_compiler(&args)));
             *RESULT_SENDER.lock().unwrap() = None;
@@ -93,10 +91,6 @@ pub fn spawn_analysis(file: &Path, sysroot: &Path) -> AnalysisHandle {
         thread,
     }
 }
-
-// ============================================================================
-// Internal implementation
-// ============================================================================
 
 static ATOMIC_TRUE: AtomicBool = AtomicBool::new(true);
 static TASKS: LazyLock<Mutex<JoinSet<AnalyzeResult>>> =
@@ -171,8 +165,8 @@ impl rustc_driver::Callbacks for AnalyzerCallback {
                 log::info!("one task joined");
                 send_result(tcx, result);
             }
-            if let Some(cache) = cache::CACHE.lock().unwrap().as_ref() {
-                cache::write_cache(&tcx.crate_name(LOCAL_CRATE).to_string(), cache);
+            if let Some(cache) = mir_cache::CACHE.lock().unwrap().as_ref() {
+                mir_cache::write_cache(&tcx.crate_name(LOCAL_CRATE).to_string(), cache);
             }
         });
 
@@ -214,14 +208,13 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> queries::mir_borrowck::P
         let _ = mir_borrowck(tcx, def_id);
     }
 
-    #[allow(clippy::unnecessary_wraps, reason = "required by rustc query system")]
     Ok(tcx
         .arena
         .alloc(ConcreteOpaqueTypes(indexmap::IndexMap::default())))
 }
 
 fn send_result(tcx: TyCtxt<'_>, analyzed: AnalyzeResult) {
-    if let Some(cache) = cache::CACHE.lock().unwrap().as_mut() {
+    if let Some(cache) = mir_cache::CACHE.lock().unwrap().as_mut() {
         cache.insert_cache(
             analyzed.file_hash.clone(),
             analyzed.mir_hash.clone(),

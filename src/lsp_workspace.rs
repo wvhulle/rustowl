@@ -11,7 +11,7 @@ use tokio::{
     task,
 };
 
-use crate::{compiler, models::Workspace, toolchain};
+use crate::{models::Workspace, rustc_wrapper as compiler, toolchain};
 
 fn set_cache_path(cmd: &mut Command, target_dir: impl AsRef<Path>) {
     cmd.env(toolchain::CACHE_DIR_ENV, target_dir.as_ref().join("cache"));
@@ -24,9 +24,7 @@ pub struct CargoCheckMessageTarget {
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
 pub enum CargoCheckMessage {
-    #[allow(unused, reason = "used for cargo check parsing")]
     CompilerArtifact { target: CargoCheckMessageTarget },
-    #[allow(unused, reason = "used for cargo check parsing")]
     BuildFinished {},
 }
 
@@ -88,6 +86,7 @@ impl Analyzer {
             Err(())
         }
     }
+    #[must_use]
     pub fn target_path(&self) -> &Path {
         &self.path
     }
@@ -185,7 +184,7 @@ impl Analyzer {
         AnalyzeEventIter {
             receiver,
             notify,
-            child: Some(child),
+            _child: Some(child),
         }
     }
 
@@ -228,7 +227,7 @@ impl Analyzer {
         AnalyzeEventIter {
             receiver,
             notify,
-            child: None,
+            _child: None,
         }
     }
 }
@@ -236,8 +235,7 @@ impl Analyzer {
 pub struct AnalyzeEventIter {
     receiver: mpsc::Receiver<AnalyzerEvent>,
     notify: Arc<Notify>,
-    #[allow(unused, reason = "used to keep child process alive")]
-    child: Option<process::Child>,
+    _child: Option<process::Child>,
 }
 impl AnalyzeEventIter {
     pub async fn next_event(&mut self) -> Option<AnalyzerEvent> {

@@ -21,7 +21,7 @@ license = "MPL-2.0"
 name = "ferrous-owl"
 readme = "README.md"
 repository = "https://github.com/wvhulle/ferrous-owl"
-version = "0.0.2"
+version = "0.0.3"
 
 [package.metadata.rust-analyzer]
 rustc_private = true
@@ -36,10 +36,12 @@ cargo_metadata = "0.23"
 clap = { version = "4", features = ["cargo", "derive"] }
 env_logger = "0.11"
 log = "0.4"
+owl-test = { path = "owl-test" }
 process_alive = "0.2"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 tokio = { version = "1", features = [
   "fs",
   "io-std",
@@ -58,9 +60,6 @@ uuid = { version = "1", features = ["v4"] }
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }
 owl-test = { path = "owl-test" }
-
-[build-dependencies]
-regex = "1"
 
 
 [profile.release]

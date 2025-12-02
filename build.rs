@@ -1,63 +1,27 @@
-use std::{env, fs::read_to_string, process::Command};
+use std::{env, process::Command};
 
 fn main() {
-    println!("cargo::rustc-check-cfg=cfg(miri)");
-    let toolchain = get_toolchain();
-    println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
-    println!("cargo::rustc-env=TOOLCHAIN_CHANNEL={}", get_channel());
-    if let Some(date) = get_toolchain_date() {
-        println!("cargo::rustc-env=TOOLCHAIN_DATE={date}");
-    }
+    // Set host tuple for runtime target detection
     let host_tuple = get_host_tuple();
     println!("cargo::rustc-env=HOST_TUPLE={host_tuple}");
+
+    // Set compile-time sysroot for finding rustc libraries
     let sysroot = get_sysroot();
     println!("cargo::rustc-env=COMPILE_TIME_SYSROOT={sysroot}");
+
+    // Set rpath for dynamic linking to rustc libraries
     #[cfg(target_os = "macos")]
-    {
-        println!("cargo::rustc-link-arg=-Wl,-rpath,@executable_path/../lib");
-    }
+    println!("cargo::rustc-link-arg=-Wl,-rpath,@executable_path/../lib");
+
     #[cfg(target_os = "linux")]
-    {
-        println!("cargo::rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
-    }
+    println!("cargo::rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
+
     #[cfg(target_os = "windows")]
-    {
-        println!("cargo::rustc-link-arg=/LIBPATH:..\\bin");
-    }
+    println!("cargo::rustc-link-arg=/LIBPATH:..\\bin");
 }
 
-// get toolchain
-// Priority: RUSTUP_TOOLCHAIN > TOOLCHAIN_CHANNEL > rust-toolchain.toml
-fn get_toolchain() -> String {
-    env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| {
-        env::var("TOOLCHAIN_CHANNEL").map_or_else(
-            |_| {
-                // Read from rust-toolchain.toml
-                let content = read_to_string("./rust-toolchain.toml").unwrap_or_default();
-                let channel = content
-                    .lines()
-                    .find(|l| l.starts_with("channel"))
-                    .and_then(|l| l.split('"').nth(1))
-                    .unwrap_or("stable");
-                format!("{}-{}", channel.trim(), get_host_tuple())
-            },
-            |v| format!("{v}-{}", get_host_tuple()),
-        )
-    })
-}
-fn get_channel() -> String {
-    get_toolchain()
-        .split('-')
-        .next()
-        .expect("failed to obtain channel from toolchain")
-        .to_owned()
-}
-fn get_toolchain_date() -> Option<String> {
-    let r = regex::Regex::new(r#"\d\d\d\d-\d\d-\d\d"#).unwrap();
-    r.find(&get_toolchain()).map(|v| v.as_str().to_owned())
-}
 fn get_host_tuple() -> String {
-    Command::new(env::var("RUSTC").unwrap_or("rustc".to_string()))
+    Command::new(env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string()))
         .arg("--print")
         .arg("host-tuple")
         .output()
@@ -66,7 +30,7 @@ fn get_host_tuple() -> String {
 }
 
 fn get_sysroot() -> String {
-    Command::new(env::var("RUSTC").unwrap_or("rustc".to_string()))
+    Command::new(env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string()))
         .arg("--print")
         .arg("sysroot")
         .output()

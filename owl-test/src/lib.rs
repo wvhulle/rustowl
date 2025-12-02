@@ -26,7 +26,6 @@
 use std::{
     env,
     fmt,
-    io::Read,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -335,87 +334,56 @@ pub struct TestResult {
     pub stderr: String,
 }
 
-fn find_test_runner() -> PathBuf {
-    if let Ok(path) = env::var("FERROUS_OWL_TEST_RUNNER") {
-        let p = PathBuf::from(&path);
-        if p.exists() {
-            return p;
-        }
-    }
-
-    // Try to find relative to CARGO_MANIFEST_DIR (workspace root)
+fn find_workspace_root() -> PathBuf {
+    // Try to find workspace root from CARGO_MANIFEST_DIR
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        // From crates/owl-test, go up to workspace root
-        let workspace_root = PathBuf::from(&manifest_dir)
-            .parent()
-            .and_then(|p| p.parent())
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from(&manifest_dir));
-        
-        let target_dir = workspace_root.join("target");
-        for profile in ["debug", "release"] {
-            let runner = target_dir.join(profile).join("test-runner");
-            if runner.exists() {
-                return runner;
+        let manifest_path = PathBuf::from(&manifest_dir);
+        // owl-test is at workspace_root/owl-test, so parent is workspace root
+        if let Some(parent) = manifest_path.parent() {
+            if parent.join("Cargo.toml").exists() {
+                return parent.to_path_buf();
             }
         }
+        return manifest_path;
     }
 
-    // Try relative to current exe
-    if let Ok(exe) = env::current_exe() {
-        if let Some(target_dir) = exe.parent() {
-            let runner = target_dir.join("test-runner");
-            if runner.exists() {
-                return runner;
-            }
-            // Try parent (e.g., target/debug/deps -> target/debug)
-            if let Some(parent) = target_dir.parent() {
-                let runner = parent.join("test-runner");
-                if runner.exists() {
-                    return runner;
-                }
-            }
-        }
-    }
-
-    panic!(
-        "Could not find test-runner binary. Build it with: cargo build --bin test-runner\n\
-         Or set FERROUS_OWL_TEST_RUNNER environment variable."
-    );
+    // Fallback to current directory
+    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 fn execute_test(test: TestCase) -> TestResult {
-    let runner = find_test_runner();
+    let workspace_root = find_workspace_root();
     let json = test.to_json();
     let name = test.name.clone();
 
-    eprintln!("[owl-test] Running test '{}' with runner: {}", name, runner.display());
+    eprintln!("[owl-test] Running test '{name}' via cargo run");
 
-    let mut child = Command::new(&runner)
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--bin", "test-runner", "--quiet", "--"])
         .arg("--single")
         .arg(&json)
+        .current_dir(&workspace_root)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap_or_else(|e| panic!("Failed to spawn test-runner at {}: {e}", runner.display()));
+        .stderr(Stdio::inherit()); // Let cargo output go directly to terminal
 
-    let mut stdout = String::new();
-    let mut stderr = String::new();
-
-    if let Some(ref mut out) = child.stdout {
-        out.read_to_string(&mut stdout).ok();
+    // Pass through logging environment variables
+    if let Ok(rust_log) = env::var("RUST_LOG") {
+        cmd.env("RUST_LOG", rust_log);
     }
-    if let Some(ref mut err) = child.stderr {
-        err.read_to_string(&mut stderr).ok();
+    if let Ok(rust_backtrace) = env::var("RUST_BACKTRACE") {
+        cmd.env("RUST_BACKTRACE", rust_backtrace);
     }
 
-    let status = child.wait().expect("Failed to wait for test-runner");
+    let output = cmd
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to run 'cargo run --bin test-runner': {e}"));
 
-    let passed = status.success();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let passed = output.status.success();
     let error = if passed {
         None
     } else {
-        Some(format!("stdout:\n{stdout}\nstderr:\n{stderr}"))
+        Some(format!("stdout:\n{stdout}"))
     };
 
     TestResult {
@@ -423,7 +391,7 @@ fn execute_test(test: TestCase) -> TestResult {
         passed,
         error,
         stdout,
-        stderr,
+        stderr: String::new(),
     }
 }
 

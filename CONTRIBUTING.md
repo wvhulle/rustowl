@@ -7,7 +7,7 @@ Format, lint, test, and build:
 ```bash
 cargo fmt
 cargo clippy --all-targets --all-features
-cargo test
+cargo test --workspace
 cargo build --release
 ```
 

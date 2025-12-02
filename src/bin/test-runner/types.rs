@@ -1,9 +1,10 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-/// Decoration kind from ferrous-owl
+/// Decoration kind from ferrous-owl.
+/// Field names use kebab-case to match owl-test's serialization.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub enum DecoKind {
     Move,
     Copy,
@@ -12,6 +13,8 @@ pub enum DecoKind {
     Drop,
     Call,
     SharedMut,
+    Lifetime,
+    Outlive,
     #[allow(dead_code, reason = "May be used in future tests")]
     PartialMove,
 }
@@ -28,30 +31,47 @@ impl DecoKind {
             Self::Drop => "drop",
             Self::Call => "call",
             Self::SharedMut => "shared-mut",
+            Self::Lifetime => "lifetime",
+            Self::Outlive => "outlive",
             Self::PartialMove => "partial-move",
         }
     }
 }
 
 /// Test case definition that can be deserialized from JSON.
+/// Field names match owl-test's TestCase struct.
 #[derive(Debug, Deserialize)]
 pub struct TestCase {
     pub name: String,
-    pub source: String,
-    #[allow(dead_code, reason = "Used for cursor positioning in future")]
-    pub cursor_line: u32,
-    #[allow(dead_code, reason = "Used for cursor positioning in future")]
-    pub cursor_char: u32,
-    pub expected: Vec<ExpectedDeco>,
+    pub code: String,
+    #[allow(dead_code, reason = "Used for cursor positioning")]
+    #[serde(default)]
+    pub cursor_text: Option<String>,
+    #[allow(dead_code, reason = "Used for cursor positioning")]
+    #[serde(default)]
+    pub cursor_line: Option<u32>,
+    #[allow(dead_code, reason = "Used for cursor positioning")]
+    #[serde(default)]
+    pub cursor_char: Option<u32>,
+    #[serde(default)]
+    pub expected_decos: Vec<ExpectedDeco>,
+    #[serde(default)]
+    #[allow(dead_code, reason = "Used for forbidden decoration checks")]
+    pub forbidden_decos: Vec<DecoKind>,
 }
 
 /// Expected decoration with location.
+/// Field names match owl-test's ExpectedDeco struct.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExpectedDeco {
     pub kind: DecoKind,
-    pub line: u32,
-    pub start_char: u32,
-    pub end_char: u32,
+    #[serde(default)]
+    pub text_match: Option<String>,
+    #[serde(default)]
+    pub line: Option<u32>,
+    #[serde(default)]
+    #[allow(dead_code, reason = "Used for message matching")]
+    pub message_contains: Option<String>,
 }
 
 /// Received diagnostic from LSP.

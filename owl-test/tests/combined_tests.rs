@@ -98,7 +98,7 @@ fn combined_with_text_match() {
         }
     "#)
     .cursor_on("s = String")
-    .expect(ExpectedDeco::new(DecoKind::Move).at_text("s"))
+    .expect(ExpectedDeco::new(DecoKind::Move).with_message("moved"))
     .run();
 }
 

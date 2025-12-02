@@ -1,29 +1,46 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     io::{self, BufRead, Error, ErrorKind, Result},
-    path::Path,
-    process::exit,
+    process::{self, exit},
 };
+
+use clap::Parser;
+use owl_test::TestCase;
 
 mod lsp_client;
 mod runner;
-mod types;
 
 use lsp_client::LspClient;
 use runner::{cleanup_workspace, run_test, setup_workspace};
-use types::TestCase;
+
+/// Test runner for ferrous-owl LSP decoration tests.
+#[derive(Parser, Debug)]
+#[command(name = "test-runner")]
+#[command(about = "Runs LSP decoration tests against ferrous-owl")]
+struct Args {
+    /// Run a single test case (JSON string)
+    #[arg(long)]
+    single: Option<String>,
+}
 
 fn main() -> Result<()> {
-    // Read test cases from stdin (JSON format)
-    let stdin = io::stdin();
-    let mut input = String::new();
+    env_logger::init();
 
-    for line in stdin.lock().lines() {
-        let line = line?;
-        input.push_str(&line);
-        input.push('\n');
-    }
+    let args = Args::parse();
+
+    // Get test input either from --single arg or stdin
+    let input = if let Some(json) = args.single {
+        format!("[{json}]")
+    } else {
+        let stdin = io::stdin();
+        let mut input = String::new();
+        for line in stdin.lock().lines() {
+            let line = line?;
+            input.push_str(&line);
+            input.push('\n');
+        }
+        input
+    };
 
     // Parse test cases
     let tests: Vec<TestCase> = match serde_json::from_str(&input) {
@@ -42,17 +59,21 @@ fn main() -> Result<()> {
     // Find the test-runner binary's directory to locate ferrous-owl
     let owl_binary = find_owl_binary()?;
 
-    // Set up workspace
+    // Set up workspace with unique name based on test name and process ID to avoid
+    // conflicts
+    let test_name = tests.first().map_or("test", |t| t.name.as_str());
+    let unique_id = process::id();
     let base_dir = env::temp_dir()
         .join("owl-tests")
         .to_string_lossy()
         .to_string();
     fs::create_dir_all(&base_dir)?;
 
-    let workspace_dir = setup_workspace(&base_dir, "test_workspace")?;
+    let workspace_name = format!("{test_name}_{unique_id}");
+    let workspace_dir = setup_workspace(&base_dir, &workspace_name)?;
 
-    // Start LSP server
-    let mut client = LspClient::start(&owl_binary, &["lsp"])?;
+    // Start LSP server (no arguments needed - ferrous-owl starts LSP by default)
+    let mut client = LspClient::start(&owl_binary, &[])?;
 
     // Initialize
     let workspace_uri = format!("file://{workspace_dir}");
@@ -68,44 +89,30 @@ fn main() -> Result<()> {
             Ok(result) => {
                 if result.passed {
                     passed += 1;
-                    println!("✓ {}", result.name);
+                    eprintln!("✓ {}", result.name);
                 } else {
                     failed += 1;
-                    println!("✗ {}", result.name);
-                    println!("{}", result.message);
+                    eprintln!("✗ {}", result.name);
+                    eprintln!("{}", result.message);
                 }
                 results.push(result);
             }
             Err(e) => {
                 failed += 1;
-                println!("✗ {} - Error: {e}", test.name);
+                eprintln!("✗ {} - Error: {e}", test.name);
             }
         }
     }
 
     // Cleanup
+    log::info!("Shutting down LSP client...");
     let _ = client.shutdown();
+    log::info!("Cleaning up workspace...");
     let _ = cleanup_workspace(&workspace_dir);
+    log::info!("Cleanup complete");
 
     // Summary
-    println!("\n{passed} passed, {failed} failed");
-
-    // Output results as JSON for programmatic consumption
-    let output = serde_json::json!({
-        "passed": passed,
-        "failed": failed,
-        "total": tests.len(),
-        "results": results.iter().map(|r| {
-            serde_json::json!({
-                "name": r.name,
-                "passed": r.passed,
-                "message": r.message
-            })
-        }).collect::<Vec<_>>()
-    });
-
-    println!("\n---JSON---");
-    println!("{}", serde_json::to_string_pretty(&output)?);
+    eprintln!("\n{passed} passed, {failed} failed");
 
     if failed > 0 {
         exit(1);
@@ -115,26 +122,18 @@ fn main() -> Result<()> {
 }
 
 fn find_owl_binary() -> Result<String> {
-    // Try to find ferrous-owl binary in common locations
-    let candidates = [
-        // Same directory as test-runner
-        env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.join("ferrous-owl")))
-            .map(|p| p.to_string_lossy().to_string()),
-        // Cargo target directory
-        Some("target/debug/ferrous-owl".to_string()),
-        Some("target/release/ferrous-owl".to_string()),
-    ];
+    // ferrous-owl binary is in the same directory as test-runner
+    let owl_path = env::current_exe()?
+        .parent()
+        .ok_or_else(|| Error::new(ErrorKind::NotFound, "Cannot determine executable directory"))?
+        .join("ferrous-owl");
 
-    for candidate in candidates.into_iter().flatten() {
-        if Path::new(&candidate).exists() {
-            return Ok(candidate);
-        }
+    if owl_path.exists() {
+        Ok(owl_path.to_string_lossy().to_string())
+    } else {
+        Err(Error::new(
+            ErrorKind::NotFound,
+            format!("ferrous-owl binary not found at {}", owl_path.display()),
+        ))
     }
-
-    Err(Error::new(
-        ErrorKind::NotFound,
-        "Could not find ferrous-owl binary",
-    ))
 }

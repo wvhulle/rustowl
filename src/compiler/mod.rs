@@ -15,6 +15,7 @@ use rustc_hir::def_id::{LOCAL_CRATE, LocalDefId};
 use rustc_interface::interface;
 use rustc_middle::{mir::ConcreteOpaqueTypes, query::queries, ty::TyCtxt, util::Providers};
 use rustc_session::config;
+use tempfile::NamedTempFile;
 use tokio::{
     runtime::{Builder, Runtime},
     sync::mpsc,
@@ -58,22 +59,25 @@ pub fn run_as_rustc_wrapper() -> i32 {
 pub fn spawn_analysis(file: &Path, sysroot: &Path) -> AnalysisHandle {
     let (sender, receiver) = mpsc::unbounded_channel();
 
+    // Create a temp file for output (avoids /dev/null issues with rustc temp files)
+    let output_file = NamedTempFile::new().expect("Failed to create temp file for compiler output");
+    let output_path = output_file.path().to_string_lossy().to_string();
+
     let mut args = vec![
         env!("CARGO_PKG_NAME").to_string(),
         env!("CARGO_PKG_NAME").to_string(),
         format!("--sysroot={}", sysroot.display()),
         "--crate-type=lib".to_string(),
+        format!("-o{output_path}"),
     ];
-    #[cfg(unix)]
-    args.push("-o/dev/null".to_string());
-    #[cfg(windows)]
-    args.push("-oNUL".to_string());
     args.push(file.to_string_lossy().to_string());
 
     let thread = thread::Builder::new()
         .name("ferrous-owl-compiler".to_string())
         .stack_size(128 * 1024 * 1024)
         .spawn(move || {
+            // Keep output_file alive until compilation completes
+            let _output_guard = output_file;
             *RESULT_SENDER.lock().unwrap() = Some(sender);
             let result = catch_unwind(AssertUnwindSafe(|| run_compiler(&args)));
             *RESULT_SENDER.lock().unwrap() = None;

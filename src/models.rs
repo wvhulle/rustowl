@@ -20,7 +20,7 @@ impl FnLocal {
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
-pub struct Loc(pub u32);
+pub struct Loc(u32);
 impl Loc {
     #[must_use]
     pub fn new(source: &str, byte_pos: u32, offset: u32) -> Self {
@@ -61,28 +61,14 @@ impl Loc {
 impl Add<i32> for Loc {
     type Output = Self;
     fn add(self, rhs: i32) -> Self::Output {
-        #[allow(clippy::cast_possible_wrap, reason = "checked against rhs")]
-        #[allow(clippy::cast_sign_loss, reason = "safe when rhs >= 0")]
-        if rhs < 0 && (self.0 as i32) < -rhs {
-            Self(0)
-        } else {
-            #[allow(clippy::cast_sign_loss, reason = "already positive")]
-            Self(self.0 + rhs as u32)
-        }
+        Self(self.0.saturating_add_signed(rhs))
     }
 }
 
 impl Sub<i32> for Loc {
     type Output = Self;
     fn sub(self, rhs: i32) -> Self::Output {
-        #[allow(clippy::cast_possible_wrap, reason = "checked against rhs")]
-        #[allow(clippy::cast_sign_loss, reason = "safe when rhs >= 0")]
-        if 0 < rhs && (self.0 as i32) < rhs {
-            Self(0)
-        } else {
-            #[allow(clippy::cast_sign_loss, reason = "already positive")]
-            Self(self.0 - rhs as u32)
-        }
+        Self(self.0.saturating_add_signed(-rhs))
     }
 }
 

@@ -6,9 +6,9 @@
 //! diagnostics as "too verbose". References produce `imm-borrow` or
 //! `mut-borrow` decorations instead.
 
-use ferrous_owl::TestCase;
-#[test]
-fn lifetime_basic_reference() {
+use ferrous_owl::{TestCase, run_tests};
+
+fn lifetime_basic_reference() -> TestCase {
     // References show as imm-borrow decorations (Lifetime is filtered)
     TestCase::new(
         "lifetime_basic_reference",
@@ -22,11 +22,9 @@ fn lifetime_basic_reference() {
     )
     .cursor_on("r = &s")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn lifetime_function_param() {
+fn lifetime_function_param() -> TestCase {
     // Function calls that take references produce Call decorations
     TestCase::new(
         "lifetime_function_param",
@@ -43,13 +41,11 @@ fn lifetime_function_param() {
     )
     .cursor_on("_f = first")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn lifetime_struct_field() {
+fn lifetime_struct_field() -> TestCase {
     // Struct construction with reference field - no special decoration on the
-    // struct itself The borrow is implicit in the field assignment
+    // struct itself. The borrow is implicit in the field assignment.
     TestCase::new(
         "lifetime_struct_field",
         r#"
@@ -65,11 +61,9 @@ fn lifetime_struct_field() {
     )
     .cursor_on("s = String") // Focus on the source String
     .expect_imm_borrow() // The &s borrows s
-    .run();
 }
 
-#[test]
-fn lifetime_return_reference() {
+fn lifetime_return_reference() -> TestCase {
     // Function call that returns a reference - Call decoration
     TestCase::new(
         "lifetime_return_reference",
@@ -87,11 +81,9 @@ fn lifetime_return_reference() {
     )
     .cursor_on("_result = longest")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn lifetime_mut_reference() {
+fn lifetime_mut_reference() -> TestCase {
     // Mutable references produce mut-borrow decorations
     TestCase::new(
         "lifetime_mut_reference",
@@ -105,11 +97,9 @@ fn lifetime_mut_reference() {
     )
     .cursor_on("r = &mut")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn lifetime_slice() {
+fn lifetime_slice() -> TestCase {
     TestCase::new(
         "lifetime_slice",
         r#"
@@ -122,11 +112,9 @@ fn lifetime_slice() {
     )
     .cursor_on("slice = &v")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn lifetime_static() {
+fn lifetime_static() -> TestCase {
     // Static references are trivial borrows
     TestCase::new(
         "lifetime_static",
@@ -141,11 +129,9 @@ fn lifetime_static() {
     )
     .cursor_on("r:")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn lifetime_nested_struct() {
+fn lifetime_nested_struct() -> TestCase {
     // The inner variable is moved into the outer struct
     TestCase::new(
         "lifetime_nested_struct",
@@ -167,5 +153,18 @@ fn lifetime_nested_struct() {
     )
     .cursor_on("inner = Inner")
     .expect_move() // inner is moved into _outer
-    .run();
+}
+
+#[test]
+fn all_lifetime_tests() {
+    run_tests(&[
+        lifetime_basic_reference(),
+        lifetime_function_param(),
+        lifetime_struct_field(),
+        lifetime_return_reference(),
+        lifetime_mut_reference(),
+        lifetime_slice(),
+        lifetime_static(),
+        lifetime_nested_struct(),
+    ]);
 }

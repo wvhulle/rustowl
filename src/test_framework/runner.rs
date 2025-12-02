@@ -1,6 +1,6 @@
 //! Test runner utilities for ferrous-owl LSP decoration tests.
 
-use std::{fs, io::Result, path::Path, time::Duration};
+use std::{fs, io::Result, time::Duration};
 
 use super::{
     TestCase,
@@ -34,8 +34,12 @@ pub fn run_test(
 
     client.wait_for_analysis(&file_uri, adjusted_line, character, Duration::from_secs(30))?;
 
-    let diagnostics =
-        client.toggle_ownership_and_wait(&file_uri, adjusted_line, character, Duration::from_secs(10))?;
+    let diagnostics = client.toggle_ownership_and_wait(
+        &file_uri,
+        adjusted_line,
+        character,
+        Duration::from_secs(10),
+    )?;
     log::info!("Got {} diagnostics, verifying...", diagnostics.len());
 
     let result = verify_decorations(test, &diagnostics);
@@ -169,12 +173,4 @@ edition = "2021"
     fs::create_dir_all(format!("{workspace_dir}/src"))?;
 
     Ok(workspace_dir)
-}
-
-/// Clean up a workspace directory.
-pub fn cleanup_workspace(workspace_dir: &str) -> Result<()> {
-    if Path::new(workspace_dir).exists() {
-        fs::remove_dir_all(workspace_dir)?;
-    }
-    Ok(())
 }

@@ -2,9 +2,9 @@
 
 //! Tests for move decoration detection.
 
-use ferrous_owl::TestCase;
-#[test]
-fn move_to_drop() {
+use ferrous_owl::{TestCase, run_tests};
+
+fn move_to_drop() -> TestCase {
     TestCase::new(
         "move_to_drop",
         r#"
@@ -16,11 +16,9 @@ fn move_to_drop() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_to_function() {
+fn move_to_function() -> TestCase {
     TestCase::new(
         "move_to_function",
         r#"
@@ -34,11 +32,9 @@ fn move_to_function() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_into_vec() {
+fn move_into_vec() -> TestCase {
     TestCase::new(
         "move_into_vec",
         r#"
@@ -51,11 +47,9 @@ fn move_into_vec() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_into_option() {
+fn move_into_option() -> TestCase {
     TestCase::new(
         "move_into_option",
         r#"
@@ -67,11 +61,9 @@ fn move_into_option() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_into_result() {
+fn move_into_result() -> TestCase {
     TestCase::new(
         "move_into_result",
         r#"
@@ -83,11 +75,9 @@ fn move_into_result() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_into_box() {
+fn move_into_box() -> TestCase {
     TestCase::new(
         "move_into_box",
         r#"
@@ -99,11 +89,9 @@ fn move_into_box() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_return_value() {
+fn move_return_value() -> TestCase {
     TestCase::new(
         "move_return_value",
         r#"
@@ -115,11 +103,9 @@ fn move_return_value() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_struct_field() {
+fn move_struct_field() -> TestCase {
     TestCase::new(
         "move_struct_field",
         r#"
@@ -133,11 +119,9 @@ fn move_struct_field() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_tuple() {
+fn move_tuple() -> TestCase {
     TestCase::new(
         "move_tuple",
         r#"
@@ -149,11 +133,9 @@ fn move_tuple() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_closure_capture() {
+fn move_closure_capture() -> TestCase {
     // With `move` keyword but only using s.len(), Rust may optimize to borrow
     // since len() only needs &self. The actual decoration is imm-borrow.
     TestCase::new(
@@ -168,11 +150,9 @@ fn move_closure_capture() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn move_assignment() {
+fn move_assignment() -> TestCase {
     TestCase::new(
         "move_assignment",
         r#"
@@ -184,11 +164,9 @@ fn move_assignment() {
     )
     .cursor_on("s = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_match_arm() {
+fn move_match_arm() -> TestCase {
     TestCase::new(
         "move_match_arm",
         r#"
@@ -203,11 +181,9 @@ fn move_match_arm() {
     )
     .cursor_on("s = Some")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_if_let() {
+fn move_if_let() -> TestCase {
     TestCase::new(
         "move_if_let",
         r#"
@@ -221,11 +197,9 @@ fn move_if_let() {
     )
     .cursor_on("s = Some")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn move_for_loop() {
+fn move_for_loop() -> TestCase {
     TestCase::new(
         "move_for_loop",
         r#"
@@ -239,5 +213,24 @@ fn move_for_loop() {
     )
     .cursor_on("v = vec!")
     .expect_move()
-    .run();
+}
+
+#[test]
+fn all_move_tests() {
+    run_tests(&[
+        move_to_drop(),
+        move_to_function(),
+        move_into_vec(),
+        move_into_option(),
+        move_into_result(),
+        move_into_box(),
+        move_return_value(),
+        move_struct_field(),
+        move_tuple(),
+        move_closure_capture(),
+        move_assignment(),
+        move_match_arm(),
+        move_if_let(),
+        move_for_loop(),
+    ]);
 }

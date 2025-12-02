@@ -1,14 +1,10 @@
 pub mod lsp_client;
 pub mod runner;
 
-use std::{
-    env, fmt,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{env, fmt, fs, io, path::PathBuf};
 
 pub use lsp_client::LspClient;
-pub use runner::{cleanup_workspace, run_test, setup_workspace};
+pub use runner::{run_test, setup_workspace};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -254,7 +250,13 @@ impl TestCase {
     }
 
     pub fn run(&self) {
-        let result = execute_test(self);
+        let owl_binary = find_owl_binary();
+        let workspace_dir =
+            create_test_workspace(&self.name, 0).expect("Failed to create test workspace");
+
+        let result = run_test_in_workspace(&owl_binary, self, &workspace_dir);
+        let _ = fs::remove_dir_all(&workspace_dir);
+
         assert!(
             result.passed,
             "Test '{}' failed:\n{}",
@@ -306,57 +308,120 @@ pub struct TestResult {
     pub error: Option<String>,
 }
 
-fn find_workspace_root() -> PathBuf {
-    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let manifest_path = PathBuf::from(&manifest_dir);
-        if let Some(parent) = manifest_path.parent()
-            && parent.join("Cargo.toml").exists()
-        {
-            return parent.to_path_buf();
+/// Run multiple test cases in parallel and assert all pass.
+/// This is much more efficient than running each test individually.
+/// Uses in-process LSP testing instead of spawning cargo subprocesses.
+pub fn run_tests(tests: &[TestCase]) {
+    use std::fmt::Write;
+
+    use rayon::prelude::*;
+
+    let owl_binary = find_owl_binary();
+
+    let results: Vec<_> = tests
+        .par_iter()
+        .enumerate()
+        .map(|(index, test)| {
+            let workspace_dir = match create_test_workspace(&test.name, index) {
+                Ok(dir) => dir,
+                Err(e) => {
+                    return TestResult {
+                        name: test.name.clone(),
+                        passed: false,
+                        error: Some(format!("Failed to create workspace: {e}")),
+                    };
+                }
+            };
+
+            let result = run_test_in_workspace(&owl_binary, test, &workspace_dir);
+
+            let _ = fs::remove_dir_all(&workspace_dir);
+            result
+        })
+        .collect();
+
+    let failures: Vec<_> = results.iter().filter(|r| !r.passed).collect();
+
+    if !failures.is_empty() {
+        let mut msg = format!("{} test(s) failed:\n", failures.len());
+        for f in &failures {
+            let _ = write!(
+                msg,
+                "\n--- {} ---\n{}\n",
+                f.name,
+                f.error.as_deref().unwrap_or("")
+            );
         }
-        return manifest_path;
+        panic!("{msg}");
     }
 
-    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    eprintln!("{} passed, 0 failed", results.len());
 }
 
-fn execute_test(test: &TestCase) -> TestResult {
-    let workspace_root = find_workspace_root();
-    let json = test.to_json();
-    let name = test.name.clone();
+fn find_owl_binary() -> String {
+    let exe_dir = env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(PathBuf::from));
 
-    eprintln!("[owl-test] Running test '{name}' via cargo run");
+    if let Some(dir) = exe_dir {
+        // Check same directory (when run from target/debug)
+        let owl = dir.join("ferrous-owl");
+        if owl.exists() {
+            return owl.to_string_lossy().to_string();
+        }
 
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--bin", "test-runner", "--quiet", "--"])
-        .arg("--single")
-        .arg(&json)
-        .current_dir(&workspace_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-
-    if let Ok(rust_log) = env::var("RUST_LOG") {
-        cmd.env("RUST_LOG", rust_log);
+        // Check parent's deps directory (when run as test executable)
+        if let Some(parent) = dir.parent() {
+            let owl = parent.join("ferrous-owl");
+            if owl.exists() {
+                return owl.to_string_lossy().to_string();
+            }
+        }
     }
-    if let Ok(rust_backtrace) = env::var("RUST_BACKTRACE") {
-        cmd.env("RUST_BACKTRACE", rust_backtrace);
-    }
 
-    let output = cmd
-        .output()
-        .unwrap_or_else(|e| panic!("Failed to run 'cargo run --bin test-runner': {e}"));
+    panic!("Could not find ferrous-owl binary. Run `cargo build` first.");
+}
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let passed = output.status.success();
-    let error = if passed {
-        None
-    } else {
-        Some(format!("stdout:\n{stdout}"))
-    };
+fn create_test_workspace(test_name: &str, index: usize) -> io::Result<String> {
+    use std::process;
 
-    TestResult {
-        name,
-        passed,
-        error,
-    }
+    let unique_id = process::id();
+    let base_dir = env::temp_dir().join("owl-tests");
+    fs::create_dir_all(&base_dir)?;
+
+    let workspace_name = format!("{test_name}_{unique_id}_{index}");
+    setup_workspace(&base_dir.to_string_lossy(), &workspace_name)
+}
+
+fn run_test_in_workspace(owl_binary: &str, test: &TestCase, workspace_dir: &str) -> TestResult {
+    let result = (|| -> io::Result<TestResult> {
+        let mut client = LspClient::start(owl_binary, &[])?;
+        let workspace_uri = format!("file://{workspace_dir}");
+        client.initialize(&workspace_uri)?;
+
+        let result =
+            run_test(&mut client, test, workspace_dir).unwrap_or_else(|e| runner::TestResult {
+                name: test.name.clone(),
+                passed: false,
+                message: format!("Error: {e}"),
+            });
+
+        let _ = client.shutdown();
+
+        Ok(TestResult {
+            name: result.name,
+            passed: result.passed,
+            error: if result.passed {
+                None
+            } else {
+                Some(result.message)
+            },
+        })
+    })();
+
+    result.unwrap_or_else(|e| TestResult {
+        name: test.name.clone(),
+        passed: false,
+        error: Some(format!("LSP client error: {e}")),
+    })
 }

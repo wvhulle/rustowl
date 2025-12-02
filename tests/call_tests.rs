@@ -1,8 +1,10 @@
 #![feature(rustc_private)]
 
-use ferrous_owl::{DecoKind, TestCase};
-#[test]
-fn call_string_new() {
+//! Tests for function call decoration detection.
+
+use ferrous_owl::{DecoKind, TestCase, run_tests};
+
+fn call_string_new() -> TestCase {
     TestCase::new(
         "call_string_new",
         r#"
@@ -14,11 +16,9 @@ fn call_string_new() {
     )
     .cursor_on("s = String")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_string_from() {
+fn call_string_from() -> TestCase {
     TestCase::new(
         "call_string_from",
         r#"
@@ -30,11 +30,9 @@ fn call_string_from() {
     )
     .cursor_on("s = String")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_vec_new() {
+fn call_vec_new() -> TestCase {
     TestCase::new(
         "call_vec_new",
         r#"
@@ -46,13 +44,10 @@ fn call_vec_new() {
     )
     .cursor_on("v = Vec")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_vec_macro() {
+fn call_vec_macro() -> TestCase {
     // vec![] macro expands to code that moves the vector, not a direct call
-    // decoration
     TestCase::new(
         "call_vec_macro",
         r#"
@@ -64,11 +59,9 @@ fn call_vec_macro() {
     )
     .cursor_on("v = vec!")
     .expect_move_at("v") // The macro produces a move, not a call
-    .run();
 }
 
-#[test]
-fn call_box_new() {
+fn call_box_new() -> TestCase {
     TestCase::new(
         "call_box_new",
         r#"
@@ -80,14 +73,10 @@ fn call_box_new() {
     )
     .cursor_on("b = Box")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_option_some() {
+fn call_option_some() -> TestCase {
     // Some is an enum variant constructor, not a function call
-    // It doesn't produce a Call decoration - just verify no panics and no
-    // unexpected decos
     TestCase::new(
         "call_option_some",
         r#"
@@ -98,12 +87,10 @@ fn call_option_some() {
     "#,
     )
     .cursor_on("opt = Some")
-    .forbid(DecoKind::Call) // Confirm no call decoration
-    .run();
+    .forbid(DecoKind::Call)
 }
 
-#[test]
-fn call_result_ok() {
+fn call_result_ok() -> TestCase {
     // Ok is an enum variant constructor, not a function call
     TestCase::new(
         "call_result_ok",
@@ -115,12 +102,10 @@ fn call_result_ok() {
     "#,
     )
     .cursor_on("res:")
-    .forbid(DecoKind::Call) // Confirm no call decoration
-    .run();
+    .forbid(DecoKind::Call)
 }
 
-#[test]
-fn call_hashmap_new() {
+fn call_hashmap_new() -> TestCase {
     TestCase::new(
         "call_hashmap_new",
         r#"
@@ -134,11 +119,9 @@ fn call_hashmap_new() {
     )
     .cursor_on("m = HashMap")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_custom_function() {
+fn call_custom_function() -> TestCase {
     TestCase::new(
         "call_custom_function",
         r#"
@@ -154,11 +137,9 @@ fn call_custom_function() {
     )
     .cursor_on("s = create")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_to_string() {
+fn call_to_string() -> TestCase {
     TestCase::new(
         "call_to_string",
         r#"
@@ -171,11 +152,9 @@ fn call_to_string() {
     )
     .cursor_on("s = n")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_default() {
+fn call_default() -> TestCase {
     TestCase::new(
         "call_default",
         r#"
@@ -187,11 +166,9 @@ fn call_default() {
     )
     .cursor_on("s:")
     .expect_call()
-    .run();
 }
 
-#[test]
-fn call_collect() {
+fn call_collect() -> TestCase {
     TestCase::new(
         "call_collect",
         r#"
@@ -203,5 +180,22 @@ fn call_collect() {
     )
     .cursor_on("v:")
     .expect_call()
-    .run();
+}
+
+#[test]
+fn all_call_tests() {
+    run_tests(&[
+        call_string_new(),
+        call_string_from(),
+        call_vec_new(),
+        call_vec_macro(),
+        call_box_new(),
+        call_option_some(),
+        call_result_ok(),
+        call_hashmap_new(),
+        call_custom_function(),
+        call_to_string(),
+        call_default(),
+        call_collect(),
+    ]);
 }

@@ -2,9 +2,9 @@
 
 //! Tests for immutable borrow decoration detection.
 
-use ferrous_owl::TestCase;
-#[test]
-fn imm_borrow_println() {
+use ferrous_owl::{TestCase, run_tests};
+
+fn imm_borrow_println() -> TestCase {
     TestCase::new(
         "imm_borrow_println",
         r#"
@@ -16,11 +16,9 @@ fn imm_borrow_println() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_method_call() {
+fn imm_borrow_method_call() -> TestCase {
     TestCase::new(
         "imm_borrow_method_call",
         r#"
@@ -32,11 +30,9 @@ fn imm_borrow_method_call() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_reference() {
+fn imm_borrow_reference() -> TestCase {
     TestCase::new(
         "imm_borrow_reference",
         r#"
@@ -48,11 +44,9 @@ fn imm_borrow_reference() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_function_param() {
+fn imm_borrow_function_param() -> TestCase {
     TestCase::new(
         "imm_borrow_function_param",
         r#"
@@ -68,11 +62,9 @@ fn imm_borrow_function_param() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_deref() {
+fn imm_borrow_deref() -> TestCase {
     TestCase::new(
         "imm_borrow_deref",
         r#"
@@ -84,11 +76,9 @@ fn imm_borrow_deref() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_slice() {
+fn imm_borrow_slice() -> TestCase {
     TestCase::new(
         "imm_borrow_slice",
         r#"
@@ -100,11 +90,9 @@ fn imm_borrow_slice() {
     )
     .cursor_on("v = vec!")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_iter() {
+fn imm_borrow_iter() -> TestCase {
     TestCase::new(
         "imm_borrow_iter",
         r#"
@@ -118,11 +106,9 @@ fn imm_borrow_iter() {
     )
     .cursor_on("v = vec!")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_contains() {
+fn imm_borrow_contains() -> TestCase {
     TestCase::new(
         "imm_borrow_contains",
         r#"
@@ -134,11 +120,9 @@ fn imm_borrow_contains() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_debug() {
+fn imm_borrow_debug() -> TestCase {
     TestCase::new(
         "imm_borrow_debug",
         r#"
@@ -150,11 +134,9 @@ fn imm_borrow_debug() {
     )
     .cursor_on("v = vec!")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_comparison() {
+fn imm_borrow_comparison() -> TestCase {
     TestCase::new(
         "imm_borrow_comparison",
         r#"
@@ -167,11 +149,9 @@ fn imm_borrow_comparison() {
     )
     .cursor_on("a = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_is_empty() {
+fn imm_borrow_is_empty() -> TestCase {
     TestCase::new(
         "imm_borrow_is_empty",
         r#"
@@ -183,11 +163,9 @@ fn imm_borrow_is_empty() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn imm_borrow_clone() {
+fn imm_borrow_clone() -> TestCase {
     TestCase::new(
         "imm_borrow_clone",
         r#"
@@ -199,5 +177,22 @@ fn imm_borrow_clone() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
+}
+
+#[test]
+fn all_imm_borrow_tests() {
+    run_tests(&[
+        imm_borrow_println(),
+        imm_borrow_method_call(),
+        imm_borrow_reference(),
+        imm_borrow_function_param(),
+        imm_borrow_deref(),
+        imm_borrow_slice(),
+        imm_borrow_iter(),
+        imm_borrow_contains(),
+        imm_borrow_debug(),
+        imm_borrow_comparison(),
+        imm_borrow_is_empty(),
+        imm_borrow_clone(),
+    ]);
 }

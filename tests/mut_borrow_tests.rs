@@ -2,9 +2,9 @@
 
 //! Tests for mutable borrow decoration detection.
 
-use ferrous_owl::TestCase;
-#[test]
-fn mut_borrow_push() {
+use ferrous_owl::{TestCase, run_tests};
+
+fn mut_borrow_push() -> TestCase {
     TestCase::new(
         "mut_borrow_push",
         r#"
@@ -16,11 +16,9 @@ fn mut_borrow_push() {
     )
     .cursor_on("v = Vec")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_reference() {
+fn mut_borrow_reference() -> TestCase {
     TestCase::new(
         "mut_borrow_reference",
         r#"
@@ -32,11 +30,9 @@ fn mut_borrow_reference() {
     )
     .cursor_on("s = String")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_clear() {
+fn mut_borrow_clear() -> TestCase {
     TestCase::new(
         "mut_borrow_clear",
         r#"
@@ -48,11 +44,9 @@ fn mut_borrow_clear() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_pop() {
+fn mut_borrow_pop() -> TestCase {
     TestCase::new(
         "mut_borrow_pop",
         r#"
@@ -64,11 +58,9 @@ fn mut_borrow_pop() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_push_str() {
+fn mut_borrow_push_str() -> TestCase {
     TestCase::new(
         "mut_borrow_push_str",
         r#"
@@ -80,11 +72,9 @@ fn mut_borrow_push_str() {
     )
     .cursor_on("s = String")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_extend() {
+fn mut_borrow_extend() -> TestCase {
     TestCase::new(
         "mut_borrow_extend",
         r#"
@@ -96,11 +86,9 @@ fn mut_borrow_extend() {
     )
     .cursor_on("v = Vec")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_insert() {
+fn mut_borrow_insert() -> TestCase {
     TestCase::new(
         "mut_borrow_insert",
         r#"
@@ -112,11 +100,9 @@ fn mut_borrow_insert() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_remove() {
+fn mut_borrow_remove() -> TestCase {
     TestCase::new(
         "mut_borrow_remove",
         r#"
@@ -128,11 +114,9 @@ fn mut_borrow_remove() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_sort() {
+fn mut_borrow_sort() -> TestCase {
     TestCase::new(
         "mut_borrow_sort",
         r#"
@@ -144,11 +128,9 @@ fn mut_borrow_sort() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_truncate() {
+fn mut_borrow_truncate() -> TestCase {
     TestCase::new(
         "mut_borrow_truncate",
         r#"
@@ -160,11 +142,9 @@ fn mut_borrow_truncate() {
     )
     .cursor_on("s = String")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_iter_mut() {
+fn mut_borrow_iter_mut() -> TestCase {
     TestCase::new(
         "mut_borrow_iter_mut",
         r#"
@@ -178,11 +158,9 @@ fn mut_borrow_iter_mut() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_swap() {
+fn mut_borrow_swap() -> TestCase {
     TestCase::new(
         "mut_borrow_swap",
         r#"
@@ -194,11 +172,9 @@ fn mut_borrow_swap() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_reverse() {
+fn mut_borrow_reverse() -> TestCase {
     TestCase::new(
         "mut_borrow_reverse",
         r#"
@@ -210,11 +186,9 @@ fn mut_borrow_reverse() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_retain() {
+fn mut_borrow_retain() -> TestCase {
     TestCase::new(
         "mut_borrow_retain",
         r#"
@@ -226,11 +200,9 @@ fn mut_borrow_retain() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn mut_borrow_dedup() {
+fn mut_borrow_dedup() -> TestCase {
     TestCase::new(
         "mut_borrow_dedup",
         r#"
@@ -242,5 +214,25 @@ fn mut_borrow_dedup() {
     )
     .cursor_on("v = vec!")
     .expect_mut_borrow()
-    .run();
+}
+
+#[test]
+fn all_mut_borrow_tests() {
+    run_tests(&[
+        mut_borrow_push(),
+        mut_borrow_reference(),
+        mut_borrow_clear(),
+        mut_borrow_pop(),
+        mut_borrow_push_str(),
+        mut_borrow_extend(),
+        mut_borrow_insert(),
+        mut_borrow_remove(),
+        mut_borrow_sort(),
+        mut_borrow_truncate(),
+        mut_borrow_iter_mut(),
+        mut_borrow_swap(),
+        mut_borrow_reverse(),
+        mut_borrow_retain(),
+        mut_borrow_dedup(),
+    ]);
 }

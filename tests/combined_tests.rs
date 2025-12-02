@@ -1,9 +1,10 @@
 #![feature(rustc_private)]
 
 //! Tests for combined decoration scenarios.
-use ferrous_owl::{DecoKind, ExpectedDeco, TestCase};
-#[test]
-fn combined_call_and_move() {
+
+use ferrous_owl::{DecoKind, ExpectedDeco, TestCase, run_tests};
+
+fn combined_call_and_move() -> TestCase {
     TestCase::new(
         "combined_call_and_move",
         r#"
@@ -16,11 +17,9 @@ fn combined_call_and_move() {
     .cursor_on("s = String")
     .expect_call()
     .expect_move()
-    .run();
 }
 
-#[test]
-fn combined_call_and_borrow() {
+fn combined_call_and_borrow() -> TestCase {
     TestCase::new(
         "combined_call_and_borrow",
         r#"
@@ -33,11 +32,9 @@ fn combined_call_and_borrow() {
     .cursor_on("s = String")
     .expect_call()
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn combined_call_and_mut_borrow() {
+fn combined_call_and_mut_borrow() -> TestCase {
     TestCase::new(
         "combined_call_and_mut_borrow",
         r#"
@@ -50,11 +47,9 @@ fn combined_call_and_mut_borrow() {
     .cursor_on("v = Vec")
     .expect_call()
     .expect_mut_borrow()
-    .run();
 }
 
-#[test]
-fn combined_multiple_borrows() {
+fn combined_multiple_borrows() -> TestCase {
     TestCase::new(
         "combined_multiple_borrows",
         r#"
@@ -68,11 +63,9 @@ fn combined_multiple_borrows() {
     )
     .cursor_on("s = String")
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn combined_borrow_then_move() {
+fn combined_borrow_then_move() -> TestCase {
     TestCase::new(
         "combined_borrow_then_move",
         r#"
@@ -86,11 +79,9 @@ fn combined_borrow_then_move() {
     .cursor_on("s = String")
     .expect_imm_borrow()
     .expect_move()
-    .run();
 }
 
-#[test]
-fn combined_mut_borrow_then_move() {
+fn combined_mut_borrow_then_move() -> TestCase {
     TestCase::new(
         "combined_mut_borrow_then_move",
         r#"
@@ -104,11 +95,9 @@ fn combined_mut_borrow_then_move() {
     .cursor_on("v = vec!")
     .expect_mut_borrow()
     .expect_move()
-    .run();
 }
 
-#[test]
-fn combined_with_text_match() {
+fn combined_with_text_match() -> TestCase {
     TestCase::new(
         "combined_with_text_match",
         r#"
@@ -120,11 +109,9 @@ fn combined_with_text_match() {
     )
     .cursor_on("s = String")
     .expect(ExpectedDeco::new(DecoKind::Move).with_message("moved"))
-    .run();
 }
 
-#[test]
-fn combined_forbid_and_expect() {
+fn combined_forbid_and_expect() -> TestCase {
     TestCase::new(
         "combined_forbid_and_expect",
         r#"
@@ -137,11 +124,9 @@ fn combined_forbid_and_expect() {
     .cursor_on("s = String")
     .expect_imm_borrow()
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn combined_multiple_variables() {
+fn combined_multiple_variables() -> TestCase {
     TestCase::new(
         "combined_multiple_variables",
         r#"
@@ -155,11 +140,9 @@ fn combined_multiple_variables() {
     )
     .cursor_on("a = String")
     .expect_move()
-    .run();
 }
 
-#[test]
-fn combined_nested_function_calls() {
+fn combined_nested_function_calls() -> TestCase {
     TestCase::new(
         "combined_nested_function_calls",
         r#"
@@ -176,11 +159,9 @@ fn combined_nested_function_calls() {
     .cursor_on("s = String")
     .expect_call()
     .expect_move()
-    .run();
 }
 
-#[test]
-fn combined_struct_with_methods() {
+fn combined_struct_with_methods() -> TestCase {
     TestCase::new(
         "combined_struct_with_methods",
         r#"
@@ -213,11 +194,9 @@ fn combined_struct_with_methods() {
     .expect_call()
     .expect_mut_borrow()
     .expect_imm_borrow()
-    .run();
 }
 
-#[test]
-fn combined_option_methods() {
+fn combined_option_methods() -> TestCase {
     // Some(...) is an enum variant constructor, not a function call
     // The methods is_some() and as_ref() create immutable borrows
     TestCase::new(
@@ -232,5 +211,22 @@ fn combined_option_methods() {
     )
     .cursor_on("opt = Some")
     .expect_imm_borrow()
-    .run();
+}
+
+#[test]
+fn all_combined_tests() {
+    run_tests(&[
+        combined_call_and_move(),
+        combined_call_and_borrow(),
+        combined_call_and_mut_borrow(),
+        combined_multiple_borrows(),
+        combined_borrow_then_move(),
+        combined_mut_borrow_then_move(),
+        combined_with_text_match(),
+        combined_forbid_and_expect(),
+        combined_multiple_variables(),
+        combined_nested_function_calls(),
+        combined_struct_with_methods(),
+        combined_option_methods(),
+    ]);
 }

@@ -2,9 +2,9 @@
 
 //! Negative tests: verify Copy types don't generate move decorations.
 
-use ferrous_owl::TestCase;
-#[test]
-fn copy_integer() {
+use ferrous_owl::{TestCase, run_tests};
+
+fn copy_integer() -> TestCase {
     TestCase::new(
         "copy_integer",
         r#"
@@ -17,11 +17,9 @@ fn copy_integer() {
     )
     .cursor_on("x = 42")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_float() {
+fn copy_float() -> TestCase {
     TestCase::new(
         "copy_float",
         r#"
@@ -34,11 +32,9 @@ fn copy_float() {
     )
     .cursor_on("x = 3.14")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_bool() {
+fn copy_bool() -> TestCase {
     TestCase::new(
         "copy_bool",
         r#"
@@ -51,11 +47,9 @@ fn copy_bool() {
     )
     .cursor_on("b = true")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_char() {
+fn copy_char() -> TestCase {
     TestCase::new(
         "copy_char",
         r#"
@@ -68,11 +62,9 @@ fn copy_char() {
     )
     .cursor_on("c = 'a'")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_tuple_of_primitives() {
+fn copy_tuple_of_primitives() -> TestCase {
     TestCase::new(
         "copy_tuple_of_primitives",
         r#"
@@ -85,11 +77,9 @@ fn copy_tuple_of_primitives() {
     )
     .cursor_on("t = (1,")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_array_of_primitives() {
+fn copy_array_of_primitives() -> TestCase {
     TestCase::new(
         "copy_array_of_primitives",
         r#"
@@ -102,11 +92,9 @@ fn copy_array_of_primitives() {
     )
     .cursor_on("arr = [1,")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_reference() {
+fn copy_reference() -> TestCase {
     TestCase::new(
         "copy_reference",
         r#"
@@ -120,11 +108,9 @@ fn copy_reference() {
     )
     .cursor_on("r = &s")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_unit() {
+fn copy_unit() -> TestCase {
     TestCase::new(
         "copy_unit",
         r#"
@@ -137,11 +123,9 @@ fn copy_unit() {
     )
     .cursor_on("u = ()")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_option_primitive() {
+fn copy_option_primitive() -> TestCase {
     TestCase::new(
         "copy_option_primitive",
         r#"
@@ -154,11 +138,9 @@ fn copy_option_primitive() {
     )
     .cursor_on("opt = Some")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_result_primitives() {
+fn copy_result_primitives() -> TestCase {
     TestCase::new(
         "copy_result_primitives",
         r#"
@@ -171,11 +153,9 @@ fn copy_result_primitives() {
     )
     .cursor_on("res:")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_derived_struct() {
+fn copy_derived_struct() -> TestCase {
     TestCase::new(
         "copy_derived_struct",
         r#"
@@ -191,11 +171,9 @@ fn copy_derived_struct() {
     )
     .cursor_on("p = Point")
     .forbid_move()
-    .run();
 }
 
-#[test]
-fn copy_function_pointer() {
+fn copy_function_pointer() -> TestCase {
     TestCase::new(
         "copy_function_pointer",
         r#"
@@ -210,5 +188,22 @@ fn copy_function_pointer() {
     )
     .cursor_on("f:")
     .forbid_move()
-    .run();
+}
+
+#[test]
+fn all_copy_tests() {
+    run_tests(&[
+        copy_integer(),
+        copy_float(),
+        copy_bool(),
+        copy_char(),
+        copy_tuple_of_primitives(),
+        copy_array_of_primitives(),
+        copy_reference(),
+        copy_unit(),
+        copy_option_primitive(),
+        copy_result_primitives(),
+        copy_derived_struct(),
+        copy_function_pointer(),
+    ]);
 }

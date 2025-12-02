@@ -183,13 +183,9 @@ fn statement_location_to_range(
 ) -> Option<Range> {
     basic_blocks.get(basic_block).and_then(|bb| {
         if statement < bb.statements.len() {
-            bb.statements
-                .get(statement)
-                .map(MirStatement::range)
+            bb.statements.get(statement).map(MirStatement::range)
         } else {
-            bb.terminator
-                .as_ref()
-                .map(MirTerminator::range)
+            bb.terminator.as_ref().map(MirTerminator::range)
         }
     })
 }

@@ -25,7 +25,8 @@ Don't pass any arguments to the binary like `--stdio`, it listens to `stdin` by 
 1. Open a Rust file in your editor (must be part of a Cargo workspace).
 2. Place the cursor on a variable definition or reference.
 3. Analysis should start automatically (check the extension status) and complete in a few seconds.
-4. Hover over the highlighted lines to check ownership status changes
+4. Select a variable definition or reference for which you want to see ownership changes.
+5. Hover over the underlined lines to check ownership status changes
 
 In some editors, you might need to manually enable ownership diagnostics with a code action.
 
@@ -47,12 +48,6 @@ Then install ferrous-owl:
 
 ```bash
 cargo +nightly install ferrous-owl --locked
-```
-
-Or from git:
-
-```bash
-cargo +nightly install --git https://github.com/wvhulle/ferrous-owl --locked
 ```
 
 Make sure the `~/.cargo/bin` directory is in your path. Then, configure one of the editor extensions that are supported out of the box (see [editors/](./editors/)):
